@@ -1,0 +1,57 @@
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Unauthorized from './pages/Unauthorized';
+import ClientDashboard from './pages/ClientDashboard';
+import EmployeeDashboard from './pages/EmployeeDashboard';
+import AdminDashboard from './pages/AdminDashboard';
+
+function RootRedirect() {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  return <Navigate to={`/${user.role}`} replace />;
+}
+
+export default function App() {
+  return (
+    <Routes>
+      {/* Public */}
+      <Route path="/"             element={<RootRedirect />} />
+      <Route path="/login"        element={<Login />} />
+      <Route path="/register"     element={<Register />} />
+      <Route path="/unauthorized" element={<Unauthorized />} />
+
+      {/* Protected — role-scoped */}
+      <Route
+        path="/client"
+        element={
+          <ProtectedRoute roles={['client']}>
+            <ClientDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/employee"
+        element={
+          <ProtectedRoute roles={['employee']}>
+            <EmployeeDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute roles={['admin']}>
+            <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Catch-all */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
