@@ -47,27 +47,26 @@ npm run lint         # ESLint
 volcan-detailing/
 ├── backend/
 │   ├── src/
-│   │   ├── config/          # DB connection, env vars, constants
-│   │   ├── middlewares/     # auth, roleGuard, rateLimiter, errorHandler, validate
-│   │   ├── routes/          # auth, appointments, users, services, admin
-│   │   ├── controllers/     # business logic per resource
-│   │   ├── schemas/         # Joi validation schemas
-│   │   ├── models/          # Prisma schema
-│   │   └── utils/           # JWT helpers, response helpers, logger
+│   │   ├── config/          # env.js (startup validation), constants.js, db.js
+│   │   ├── middlewares/     # auth.js, roleGuard.js, validate.js, errorHandler.js
+│   │   ├── routes/          # auth, appointments, users, services, availability
+│   │   ├── controllers/     # one file per resource; owns IDOR + business logic
+│   │   ├── schemas/         # Joi schemas (authSchema, appointmentSchema, etc.)
+│   │   └── utils/           # jwt.js, response.js (ok/fail helpers), logger.js
 │   ├── prisma/
-│   │   └── schema.prisma
-│   ├── .env.example
+│   │   ├── schema.prisma
+│   │   ├── seed.js
+│   │   └── migrations/
 │   └── package.json
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/           # Login, Register, Dashboard (per role), Appointments
-│   │   ├── components/      # Navbar, AppointmentCard, ProtectedRoute
-│   │   ├── context/         # AuthContext
-│   │   ├── services/        # API calls via Axios
-│   │   └── utils/           # form validators, date helpers
+│   │   ├── pages/           # Login, Register, AdminDashboard, ClientDashboard, EmployeeDashboard, Unauthorized
+│   │   ├── components/      # Navbar, AppointmentCard, ProtectedRoute, admin/{AppointmentsTab,UsersTab,ServicesTab}
+│   │   ├── context/         # AuthContext.jsx — user + accessToken in memory; loading state for session restore
+│   │   ├── services/        # api.js (Axios + interceptor), authService, appointmentService, etc.
+│   │   └── utils/           # dateHelpers.js, validators.js
 │   └── package.json
 └── docs/
-    ├── REQUIREMENTS.md
     └── SECURITY_DECISIONS.md
 ```
 
