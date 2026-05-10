@@ -269,3 +269,179 @@ keys exist, so it runs in the correct order.
   definition.
 - `src/controllers/appointmentController.js` — `findFirst` conflict check before
   `create`; `P2002` caught in the `catch` block and returned as `SLOT_TAKEN`.
+
+---
+
+## 9. Change password requires current password confirmation
+
+**Decision:** `POST /api/auth/change-password` requires the caller to supply
+`currentPassword` and verifies it with bcrypt before applying the update.
+
+**Rationale:** A successful login produces a JWT access token that is valid for
+15 minutes and a refresh token that is valid for 7 days. If an attacker obtains
+a session — by stealing the device, intercepting a token, or exploiting XSS —
+they would otherwise be able to silently change the victim's password and lock
+them out permanently. Requiring the current password means the attacker must
+know a secret that was never transmitted after initial login, which they are
+unlikely to have from a stolen token alone.
+
+**Why the error message is generic:** Whether the supplied `currentPassword` is
+wrong, the account does not exist, or the account is inactive, the endpoint
+returns the same `INVALID_CREDENTIALS` code and `"Invalid credentials"` message.
+Returning a distinct error such as `"Current password is incorrect"` would confirm
+to an attacker that they are targeting a valid account and that the session they
+hold is still active — information they should not be able to confirm.
+
+The bcrypt comparison always runs against the stored hash (or a dummy hash if
+the user is somehow not found) to prevent the timing-attack variant described in
+section 7.
+
+**Known limitation — existing tokens are not invalidated:** Changing the password
+does not revoke any issued tokens. An attacker who had already captured an access
+token retains access until it expires (up to 15 minutes). An attacker with the
+refresh token can continue obtaining new access tokens until the 7-day refresh
+token expires, regardless of the password change.
+
+Fully closing this gap requires one of:
+1. **Refresh token rotation with a blocklist** — each refresh issues a new token
+   and invalidates the previous one. A password change marks all tokens for that
+   user as invalid in the blocklist.
+2. **Embedding a `passwordVersion` counter** in the JWT payload and incrementing
+   it on every password change. The `refresh` controller compares the token's
+   version with the current value in the database and rejects mismatches.
+
+Both require additional state in the database and are left as a post-MVP
+improvement.
+
+**Implementation:**
+- `src/controllers/authController.js` — `changePassword`: fetches `passwordHash`,
+  runs `bcrypt.compare` unconditionally, returns `INVALID_CREDENTIALS` on failure
+  (same code as login), hashes the new password at cost 12, updates the record.
+- `src/schemas/authSchema.js` — `changePassword` schema: `newPassword` reuses the
+  same `password` rule as registration (min 8 chars, uppercase, digit, special char).
+
+---
+
+## 10. Multi-Factor Authentication (TOTP)
+
+**Decision:** TOTP-based MFA using the speakeasy library, compatible with Google
+Authenticator and any RFC 6238–compliant app. MFA is opt-in per user and gated
+behind a verified setup step.
+
+### What TOTP is and why it helps
+
+TOTP (Time-based One-Time Password, RFC 6238) generates a 6-digit code by hashing
+a shared secret together with the current Unix time divided into 30-second windows.
+The server and the authenticator app each compute the code independently — no
+network communication is needed at verification time. Because the code changes
+every 30 seconds and is single-use in practice, a stolen password alone is not
+enough to authenticate: the attacker also needs physical access to the device
+running the authenticator.
+
+### Two-step login flow and the tempToken
+
+When a user with MFA enabled submits their password, the backend cannot issue a
+full session immediately — the second factor has not been verified yet. Instead,
+it returns a **tempToken**:
+
+```js
+if (user.mfaEnabled) {
+  const tempToken = signTemp({ sub: user.id, role: user.role, mfaRequired: true });
+  return ok(res, { mfaRequired: true, tempToken });
+}
+```
+
+The tempToken is a JWT signed with `JWT_SECRET` and expires in **5 minutes**.
+Critically, it carries `mfaRequired: true` in its payload. The `POST /api/auth/mfa/validate`
+endpoint checks for this claim before issuing real tokens:
+
+```js
+if (!payload.mfaRequired) return fail(res, 'Invalid token', 'INVALID_TOKEN', 401);
+```
+
+This means the tempToken **cannot be used as an access token** even if intercepted:
+the auth middleware (`src/middlewares/auth.js`) accepts any valid JWT signed with
+`JWT_SECRET`, but a tempToken only grants access to the `/mfa/validate` endpoint.
+Every other protected route ignores the `mfaRequired` claim entirely and relies on
+the normal `sub`/`role` payload, so a tempToken presented as a Bearer token would
+pass signature verification but carry no special privileges beyond what a normal
+access token would — and normal access tokens do not have `mfaRequired: true`, so
+this claim is effectively inert outside the validate endpoint.
+
+The 5-minute expiry limits the window during which a stolen tempToken can be used
+to complete the login.
+
+### Setup requires verification before MFA is enabled
+
+`POST /api/auth/mfa/setup` generates a TOTP secret and saves it to the user record,
+but does **not** set `mfaEnabled = true`. The user must call
+`POST /api/auth/mfa/verify-setup` with a valid code from their authenticator app:
+
+```js
+await prisma.user.update({ where: { id: req.user.sub }, data: { mfaEnabled: true } });
+```
+
+This two-step process prevents a user from enabling MFA with a misconfigured
+authenticator — for example, an app that scanned a blurry QR code and stored the
+secret incorrectly. If MFA were enabled without verification, the user would be
+locked out of their account at next login with no way to recover without admin
+intervention.
+
+### Disabling MFA requires password confirmation
+
+`POST /api/auth/mfa/disable` requires the user to supply their current password,
+verified with bcrypt before the flag is cleared:
+
+```js
+const valid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
+if (!user || !valid) return fail(res, 'Invalid credentials', 'INVALID_CREDENTIALS', 401);
+await prisma.user.update({ where: { id: user.id }, data: { mfaEnabled: false, mfaSecret: null } });
+```
+
+Without this check, an attacker who obtains a stolen session (access token) could
+immediately disable MFA and then change the password, fully locking out the
+legitimate owner. Requiring the password means the session alone is insufficient
+— the attacker must also know the password, which is precisely what MFA is meant
+to protect against.
+
+### Clock drift tolerance (window: 1)
+
+TOTP codes are time-bound to 30-second windows. If the server clock and the
+device clock differ slightly — a common occurrence on mobile devices without NTP —
+a code generated at the edge of a window may be rejected even though it is
+technically valid. speakeasy's `window: 1` accepts the current window plus one
+window on each side (±30 seconds), giving a total acceptance range of 90 seconds:
+
+```js
+speakeasy.totp.verify({ secret, encoding: 'base32', token, window: 1 });
+```
+
+A wider window (e.g. `window: 2`, ±60 seconds) would improve tolerance for
+misconfigured clocks but would also extend the time during which a captured code
+could be replayed. `window: 1` is the OWASP-recommended default.
+
+### Known limitation — refresh token rotation
+
+MFA hardens the initial login but does not protect against a stolen refresh token
+that was issued before MFA was enabled, or an access token captured mid-session.
+The same token-invalidation limitation described in section 9 applies here.
+
+Refresh token rotation is the natural pairing for MFA: each use of a refresh token
+issues a new one and invalidates the previous, so a stolen token becomes useless
+after one successful rotation. Combined with MFA, this would mean an attacker needs
+the password, the physical authenticator device, and a live refresh token — all
+simultaneously — to maintain a session. This is left as a post-MVP improvement.
+
+**Implementation:**
+- `prisma/schema.prisma` — `mfaSecret String? @map("mfa_secret")` and
+  `mfaEnabled Boolean @default(false) @map("mfa_enabled")` on the `User` model.
+- `prisma/migrations/20260510170104_add_mfa_fields/` — adds both columns with safe
+  defaults (`NULL` secret, `false` enabled) so existing users are unaffected.
+- `src/utils/jwt.js` — `signTemp`/`verifyTemp` use `JWT_SECRET` with a 5-minute
+  expiry; the shared secret is intentional (no new env var needed) because the
+  `mfaRequired` claim makes the token structurally distinct from an access token.
+- `src/controllers/authController.js` — `mfaSetup`, `mfaVerifySetup`, `mfaDisable`,
+  `mfaValidate`; updated `login` and `refresh` now include `mfaEnabled` in the
+  returned user object.
+- `src/schemas/authSchema.js` — `mfaVerifySetup` and `mfaValidate` require `token`
+  to match `/^\d{6}$/`; `mfaDisable` requires a non-empty `password` string.

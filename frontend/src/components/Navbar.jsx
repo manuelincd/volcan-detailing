@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const ROLE_LABELS = {
@@ -9,6 +9,7 @@ const ROLE_LABELS = {
 
 export default function Navbar() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <nav className="navbar">
@@ -21,6 +22,12 @@ export default function Navbar() {
             <span className={`badge badge-${user.role}`}>
               {ROLE_LABELS[user.role] ?? user.role}
             </span>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => navigate('/perfil')}
+            >
+              Mi perfil
+            </button>
             <button className="btn btn-ghost btn-sm" onClick={logout}>
               Cerrar sesión
             </button>

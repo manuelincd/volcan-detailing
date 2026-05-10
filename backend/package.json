@@ -19,7 +19,9 @@
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "joi": "^17.13.3",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "qrcode": "^1.5.4",
+    "speakeasy": "^2.0.0"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

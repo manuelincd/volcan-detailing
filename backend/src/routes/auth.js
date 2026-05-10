@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const rateLimit = require('express-rate-limit');
+const auth = require('../middlewares/auth');
 const validate = require('../middlewares/validate');
 const authSchema = require('../schemas/authSchema');
 const authController = require('../controllers/authController');
@@ -22,5 +23,12 @@ router.post('/register', validate(authSchema.register), authController.register)
 router.post('/login', loginLimiter, validate(authSchema.login), authController.login);
 router.post('/logout', authController.logout);
 router.post('/refresh', authController.refresh);
+router.post('/change-password', auth, validate(authSchema.changePassword), authController.changePassword);
+
+// MFA — setup and disable require a valid session; validate uses tempToken instead
+router.post('/mfa/setup', auth, authController.mfaSetup);
+router.post('/mfa/verify-setup', auth, validate(authSchema.mfaVerifySetup), authController.mfaVerifySetup);
+router.post('/mfa/disable', auth, validate(authSchema.mfaDisable), authController.mfaDisable);
+router.post('/mfa/validate', validate(authSchema.mfaValidate), authController.mfaValidate);
 
 module.exports = router;

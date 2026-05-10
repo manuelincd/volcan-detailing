@@ -33,6 +33,8 @@ model User {
   phone        String?  @db.VarChar(20)
   role         Role     @default(client)
   isActive     Boolean  @default(true) @map("is_active")
+  mfaSecret    String?  @map("mfa_secret")
+  mfaEnabled   Boolean  @default(false) @map("mfa_enabled")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

@@ -7,13 +7,24 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser]               = useState(null);
   const [accessToken, setAccessToken] = useState(null);
-  // true while the initial session-restore attempt is in flight;
-  // ProtectedRoute renders nothing until this resolves to prevent
-  // a flash-redirect to /login on every page refresh
   const [loading, setLoading]         = useState(true);
 
   const login = useCallback(async (email, password) => {
     const { data } = await authService.login(email, password);
+    const payload = data.data;
+
+    if (payload.mfaRequired) {
+      return { mfaRequired: true, tempToken: payload.tempToken };
+    }
+
+    setUser(payload.user);
+    setAccessToken(payload.accessToken);
+    return payload.user;
+  }, []);
+
+  // Completes a login that required MFA; called after the user submits their TOTP code
+  const validateMfa = useCallback(async (tempToken, token) => {
+    const { data } = await authService.mfaValidate(tempToken, token);
     setUser(data.data.user);
     setAccessToken(data.data.accessToken);
     return data.data.user;
@@ -32,14 +43,15 @@ export function AuthProvider({ children }) {
     return data.data.accessToken;
   }, []);
 
-  // Register refreshToken with the Axios interceptor so it can silently
-  // retry requests that fail with TOKEN_EXPIRED
+  // Patch local user state (e.g. after MFA enable/disable) without a full refresh
+  const updateUser = useCallback((updates) => {
+    setUser((prev) => prev ? { ...prev, ...updates } : prev);
+  }, []);
+
   useEffect(() => {
     setRefresher(refreshToken);
   }, [refreshToken]);
 
-  // Attempt to restore the session from the HttpOnly refresh-token cookie.
-  // Runs once on mount; on failure the user stays null (not logged in).
   useEffect(() => {
     refreshToken()
       .catch(() => {})
@@ -47,7 +59,7 @@ export function AuthProvider({ children }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, loading, login, logout, refreshToken }}>
+    <AuthContext.Provider value={{ user, accessToken, loading, login, validateMfa, logout, refreshToken, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

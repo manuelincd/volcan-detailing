@@ -7,6 +7,7 @@ import Unauthorized from './pages/Unauthorized';
 import ClientDashboard from './pages/ClientDashboard';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import Profile from './pages/ChangePassword';
 
 export default function App() {
   return (
@@ -39,6 +40,16 @@ export default function App() {
         element={
           <ProtectedRoute roles={['admin']}>
             <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Profile — all authenticated roles */}
+      <Route
+        path="/perfil"
+        element={
+          <ProtectedRoute roles={['admin', 'employee', 'client']}>
+            <Profile />
           </ProtectedRoute>
         }
       />
