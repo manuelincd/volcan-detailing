@@ -8,7 +8,7 @@ export const toDateString = (date) =>
 // "2024-01-15T00:00:00.000Z" always renders as "January 15, 2024"
 // regardless of the browser timezone.
 export const formatDate = (date) =>
-  new Date(date).toLocaleDateString('en-US', {
+  new Date(date).toLocaleDateString('es-MX', {
     year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC',
   });
 

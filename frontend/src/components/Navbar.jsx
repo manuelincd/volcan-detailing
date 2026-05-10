@@ -1,22 +1,37 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+const ROLE_LABELS = {
+  admin:    'Administrador',
+  employee: 'Empleado',
+  client:   'Cliente',
+};
+
 export default function Navbar() {
   const { user, logout } = useAuth();
+
   return (
-    <nav>
-      <Link to="/">Volcan Detailing</Link>
-      {user ? (
-        <>
-          <span>{user.name}</span>
-          <button onClick={logout}>Logout</button>
-        </>
-      ) : (
-        <>
-          <Link to="/login">Login</Link>
-          <Link to="/register">Register</Link>
-        </>
-      )}
+    <nav className="navbar">
+      <Link to="/" className="navbar-brand">VOLCÁN DETAILING</Link>
+
+      <div className="navbar-actions">
+        {user ? (
+          <>
+            <span className="navbar-user">{user.name}</span>
+            <span className={`badge badge-${user.role}`}>
+              {ROLE_LABELS[user.role] ?? user.role}
+            </span>
+            <button className="btn btn-ghost btn-sm" onClick={logout}>
+              Cerrar sesión
+            </button>
+          </>
+        ) : (
+          <>
+            <Link to="/login" className="btn btn-ghost btn-sm">Iniciar sesión</Link>
+            <Link to="/register" className="btn btn-primary btn-sm">Reservar ahora</Link>
+          </>
+        )}
+      </div>
     </nav>
   );
 }

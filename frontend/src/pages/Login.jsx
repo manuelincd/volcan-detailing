@@ -8,39 +8,38 @@ export default function Login() {
   const navigate  = useNavigate();
   const location  = useLocation();
 
-  const [email,       setEmail]       = useState('');
-  const [password,    setPassword]    = useState('');
-  const [error,       setError]       = useState('');
-  const [submitting,  setSubmitting]  = useState(false);
+  const [email,      setEmail]      = useState('');
+  const [password,   setPassword]   = useState('');
+  const [error,      setError]      = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  // Already authenticated — redirect immediately
   if (!loading && user) {
     const destination = location.state?.from?.pathname ?? `/${user.role}`;
     return <Navigate to={destination} replace />;
   }
+
+  const successMessage = location.state?.message;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
     if (!validateEmail(email)) {
-      setError('Enter a valid email address.');
+      setError('Ingresa un correo electrónico válido.');
       return;
     }
 
     setSubmitting(true);
     try {
       const loggedInUser = await login(email, password);
-      // Redirect back to the page the user tried to visit, or to their dashboard
       const destination = location.state?.from?.pathname ?? `/${loggedInUser.role}`;
       navigate(destination, { replace: true });
     } catch (err) {
       const code = err.response?.data?.code;
       if (code === 'RATE_LIMIT_EXCEEDED') {
-        setError('Too many login attempts. Please wait 15 minutes and try again.');
+        setError('Demasiados intentos. Espera 15 minutos e intenta de nuevo.');
       } else {
-        // Deliberately vague — do not confirm whether the email exists
-        setError('Invalid email or password.');
+        setError('Correo electrónico o contraseña incorrectos.');
       }
     } finally {
       setSubmitting(false);
@@ -48,38 +47,64 @@ export default function Login() {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h1>Sign in</h1>
+    <div className="auth-page">
+      <Link to="/" className="auth-brand">VOLCÁN DETAILING</Link>
 
-      {error && <p role="alert">{error}</p>}
+      <div className="card auth-card">
+        <h1 className="auth-title">Iniciar sesión</h1>
 
-      <label htmlFor="email">Email</label>
-      <input
-        id="email"
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        autoComplete="email"
-        required
-        disabled={submitting}
-      />
+        {successMessage && (
+          <div className="alert alert-success" role="status">{successMessage}</div>
+        )}
+        {error && (
+          <div className="alert alert-error" role="alert">{error}</div>
+        )}
 
-      <label htmlFor="password">Password</label>
-      <input
-        id="password"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        autoComplete="current-password"
-        required
-        disabled={submitting}
-      />
+        <form onSubmit={handleSubmit} noValidate>
+          <div className="form-group">
+            <label htmlFor="email">Correo electrónico</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              placeholder="tú@ejemplo.com"
+              required
+              disabled={submitting}
+            />
+          </div>
 
-      <button type="submit" disabled={submitting}>
-        {submitting ? 'Signing in…' : 'Sign in'}
-      </button>
+          <div className="form-group">
+            <label htmlFor="password">Contraseña</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              placeholder="••••••••"
+              required
+              disabled={submitting}
+            />
+          </div>
 
-      <Link to="/register">Create an account</Link>
-    </form>
+          <button
+            type="submit"
+            className="btn btn-primary btn-full btn-submit"
+            disabled={submitting}
+          >
+            {submitting ? (
+              <><span className="spinner" /> Iniciando sesión…</>
+            ) : 'Iniciar sesión'}
+          </button>
+        </form>
+      </div>
+
+      <p className="auth-footer">
+        ¿No tienes cuenta?{' '}
+        <Link to="/register">Regístrate</Link>
+      </p>
+    </div>
   );
 }

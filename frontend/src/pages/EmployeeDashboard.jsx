@@ -4,7 +4,6 @@ import { appointmentService } from '../services/appointmentService';
 import Navbar from '../components/Navbar';
 import { toDateString, localToday } from '../utils/dateHelpers';
 
-// Transitions an employee may make, mirroring the backend ALLOWED_TRANSITIONS
 const NEXT_STATUSES = {
   pending:     ['in_progress'],
   confirmed:   ['in_progress'],
@@ -12,11 +11,11 @@ const NEXT_STATUSES = {
 };
 
 const STATUS_LABELS = {
-  pending:     'Pending',
-  confirmed:   'Confirmed',
-  in_progress: 'In Progress',
-  completed:   'Completed',
-  cancelled:   'Cancelled',
+  pending:     'Pendiente',
+  confirmed:   'Confirmada',
+  in_progress: 'En proceso',
+  completed:   'Completada',
+  cancelled:   'Cancelada',
 };
 
 // ─── Employee appointment card ────────────────────────────────────────────────
@@ -25,34 +24,45 @@ function EmployeeAppointmentCard({ appointment: a, onStatusChange, updating }) {
   const nextOptions = NEXT_STATUSES[a.status] ?? [];
 
   return (
-    <div>
-      <p>
-        <strong>{a.timeSlot}</strong>
-        {' · '}
-        {STATUS_LABELS[a.status] ?? a.status}
-      </p>
-      <p>Client: {a.client?.name ?? '—'}</p>
-      <p>Service: {a.service?.name ?? '—'} ({a.service?.durationMinutes} min)</p>
-      <p>Vehicle: {a.vehicleType}</p>
-      {a.notes && <p>Notes: {a.notes}</p>}
+    <div className="card">
+      <div className="appointment-card-header">
+        <div>
+          <p className="appointment-datetime">{a.timeSlot}</p>
+          <div className="appointment-meta">
+            <span>{a.client?.name ?? '—'}</span>
+            <span className="appointment-meta-sep">·</span>
+            <span>{a.service?.name ?? '—'} ({a.service?.durationMinutes} min)</span>
+            <span className="appointment-meta-sep">·</span>
+            <span>{a.vehicleType}</span>
+          </div>
+        </div>
+        <span className={`badge badge-${a.status}`}>{STATUS_LABELS[a.status] ?? a.status}</span>
+      </div>
+
+      {a.notes && <p className="appointment-notes">{a.notes}</p>}
 
       {nextOptions.length > 0 ? (
-        <select
-          defaultValue=""
-          disabled={updating}
-          onChange={(e) => {
-            if (e.target.value) onStatusChange(a.id, e.target.value);
-          }}
-        >
-          <option value="" disabled>
-            {updating ? 'Updating…' : 'Update status…'}
-          </option>
-          {nextOptions.map((s) => (
-            <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-          ))}
-        </select>
+        <div className="status-select-row">
+          <label htmlFor={`status-${a.id}`}>Actualizar estado</label>
+          <select
+            id={`status-${a.id}`}
+            defaultValue=""
+            disabled={updating}
+            onChange={(e) => {
+              if (e.target.value) onStatusChange(a.id, e.target.value);
+            }}
+          >
+            <option value="" disabled>
+              {updating ? 'Actualizando…' : 'Cambiar a…'}
+            </option>
+            {nextOptions.map((s) => (
+              <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+            ))}
+          </select>
+          {updating && <span className="spinner" />}
+        </div>
       ) : (
-        <p><em>No further actions available.</em></p>
+        <p className="no-actions-note">Sin acciones disponibles.</p>
       )}
     </div>
   );
@@ -61,17 +71,17 @@ function EmployeeAppointmentCard({ appointment: a, onStatusChange, updating }) {
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export default function EmployeeDashboard() {
-  const { accessToken }   = useAuth();
+  const { accessToken } = useAuth();
   const [appointments, setAppointments] = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState('');
-  const [updating,     setUpdating]     = useState(null); // id in flight
+  const [updating,     setUpdating]     = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
     appointmentService.list(accessToken)
       .then((res) => setAppointments(res.data.data))
-      .catch(() => setError('Failed to load appointments.'))
+      .catch(() => setError('No se pudieron cargar las citas.'))
       .finally(() => setLoading(false));
   }, [accessToken]);
 
@@ -85,42 +95,58 @@ export default function EmployeeDashboard() {
         prev.map((a) => (a.id === id ? res.data.data : a))
       );
     } catch (err) {
-      setError(err.response?.data?.message ?? 'Failed to update status.');
+      setError(err.response?.data?.message ?? 'No se pudo actualizar el estado.');
     } finally {
       setUpdating(null);
     }
   };
 
-  // Filter to today's appointments only and sort chronologically by time slot.
-  // The API already orders by date+timeSlot, but we filter client-side and
-  // re-sort so the order is correct regardless of what the server returns.
   const today = localToday();
   const todayAppointments = appointments
     .filter((a) => toDateString(a.date) === today)
     .sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
 
+  const dateLabel = new Date().toLocaleDateString('es-MX', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
+
+  const count = todayAppointments.length;
+
   return (
-    <div>
+    <div className="page">
       <Navbar />
-      <h1>Today's jobs</h1>
-      <p>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+      <main className="container">
+        <div className="dashboard-header">
+          <div>
+            <h1 className="dashboard-title">Trabajos de hoy</h1>
+            <p className="dashboard-subtitle">{dateLabel}</p>
+          </div>
+          <span className="badge badge-employee">
+            {count} {count === 1 ? 'cita' : 'citas'}
+          </span>
+        </div>
 
-      {error && <p role="alert">{error}</p>}
+        {error && <div className="alert alert-error" role="alert">{error}</div>}
 
-      {loading ? (
-        <p>Loading…</p>
-      ) : todayAppointments.length === 0 ? (
-        <p>No appointments scheduled for today.</p>
-      ) : (
-        todayAppointments.map((a) => (
-          <EmployeeAppointmentCard
-            key={a.id}
-            appointment={a}
-            onStatusChange={handleStatusChange}
-            updating={updating === a.id}
-          />
-        ))
-      )}
+        {loading ? (
+          <div className="loading-state">
+            <span className="spinner" /><span>Cargando…</span>
+          </div>
+        ) : todayAppointments.length === 0 ? (
+          <div className="empty-state">No hay citas programadas para hoy.</div>
+        ) : (
+          <div className="appointments-list">
+            {todayAppointments.map((a) => (
+              <EmployeeAppointmentCard
+                key={a.id}
+                appointment={a}
+                onStatusChange={handleStatusChange}
+                updating={updating === a.id}
+              />
+            ))}
+          </div>
+        )}
+      </main>
     </div>
   );
 }

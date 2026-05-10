@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Unauthorized from './pages/Unauthorized';
@@ -8,18 +8,11 @@ import ClientDashboard from './pages/ClientDashboard';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 
-function RootRedirect() {
-  const { user, loading } = useAuth();
-  if (loading) return null;
-  if (!user) return <Navigate to="/login" replace />;
-  return <Navigate to={`/${user.role}`} replace />;
-}
-
 export default function App() {
   return (
     <Routes>
       {/* Public */}
-      <Route path="/"             element={<RootRedirect />} />
+      <Route path="/"             element={<Landing />} />
       <Route path="/login"        element={<Login />} />
       <Route path="/register"     element={<Register />} />
       <Route path="/unauthorized" element={<Unauthorized />} />

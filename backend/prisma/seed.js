@@ -19,22 +19,22 @@ const users = [
 
 const services = [
   {
-    name: 'Basic Wash',
-    description: 'Exterior hand wash, rinse, and dry. Includes tire cleaning.',
+    name: 'Lavado Básico',
+    description: 'Lavado exterior a mano, enjuague y secado. Incluye limpieza de llantas.',
     durationMinutes: 30,
-    price: 15.00,
+    price: 180.00,
   },
   {
-    name: 'Full Wash',
-    description: 'Exterior wash plus interior vacuum, window cleaning, and dashboard wipe-down.',
+    name: 'Lavado Completo',
+    description: 'Lavado exterior más aspirado interior, limpieza de vidrios y limpieza del tablero.',
     durationMinutes: 60,
-    price: 30.00,
+    price: 320.00,
   },
   {
-    name: 'Premium Detailing',
-    description: 'Full wash with clay bar treatment, hand wax, leather conditioning, and odor elimination.',
+    name: 'Detallado Premium',
+    description: 'Lavado completo con tratamiento de arcilla, encerado a mano, acondicionamiento de piel y eliminación de olores.',
     durationMinutes: 180,
-    price: 90.00,
+    price: 850.00,
   },
 ];
 
@@ -68,13 +68,8 @@ async function main() {
   }
 
   console.log('Seeding services…');
-  for (const s of services) {
-    await prisma.service.upsert({
-      where: { name: s.name },
-      update: {},
-      create: s,
-    });
-  }
+  await prisma.service.deleteMany();
+  await prisma.service.createMany({ data: services });
 
   console.log('Seeding time slots…');
   for (const slot of timeSlots) {
