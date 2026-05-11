@@ -1,5 +1,6 @@
 const prisma = require('../config/db');
 const { ok, fail } = require('../utils/response');
+const { stripHtml } = require('../utils/sanitize');
 
 function parseId(param) {
   const id = parseInt(param, 10);
@@ -19,9 +20,14 @@ exports.list = async (req, res, next) => {
 exports.create = async (req, res, next) => {
   try {
     // Whitelist fields explicitly — isActive is always true on creation
-    const { name, description, durationMinutes, price } = req.body;
+    const { name, description, durationMinutes, prices } = req.body;
+    // Re-construct prices from known keys only; Joi already validated, but this
+    // prevents any future middleware from injecting extra keys into the JSON column.
+    const safePrice = { sedan: prices.sedan, suv: prices.suv, van: prices.van };
+    // Defense-in-depth: strip any residual HTML even though Joi already rejected it.
+    const safeDesc = description != null ? stripHtml(description) : undefined;
     const service = await prisma.service.create({
-      data: { name, description, durationMinutes, price, isActive: true },
+      data: { name, description: safeDesc, durationMinutes, prices: safePrice, isActive: true },
     });
     ok(res, service, 201);
   } catch (err) {
@@ -37,11 +43,13 @@ exports.update = async (req, res, next) => {
     if (!id) return fail(res, 'Invalid id', 'INVALID_ID', 400);
 
     // Whitelist fields — prevents mass assignment from unexpected body keys
-    const { name, description, durationMinutes, price, isActive } = req.body;
+    const { name, description, durationMinutes, prices, isActive } = req.body;
+    const safePrice = { sedan: prices.sedan, suv: prices.suv, van: prices.van };
+    const safeDesc = description != null ? stripHtml(description) : undefined;
 
     const service = await prisma.service.update({
       where: { id },
-      data:  { name, description, durationMinutes, price, isActive },
+      data:  { name, description: safeDesc, durationMinutes, prices: safePrice, isActive },
     });
     ok(res, service);
   } catch (err) {

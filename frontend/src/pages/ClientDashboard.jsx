@@ -7,7 +7,16 @@ import AppointmentCard from '../components/AppointmentCard';
 import Navbar from '../components/Navbar';
 import { localToday, localMaxDate } from '../utils/dateHelpers';
 
-const VEHICLE_TYPES = ['Sedán', 'SUV', 'Camioneta', 'Van', 'Motocicleta', 'Otro'];
+const VEHICLE_TYPES = ['Sedán/Hatchback', 'SUV', 'Camioneta', 'Van', 'Motocicleta', 'Pickup doble', 'Otro'];
+
+const VEHICLE_PRICE_KEY = {
+  'Sedán/Hatchback': 'sedan',
+  'SUV':             'suv',
+  'Camioneta':       'suv',
+  'Van':             'van',
+  'Motocicleta':     'sedan',
+  'Pickup doble':    'van',
+};
 const MAX_DAYS = 30;
 const EMPTY_FORM = { serviceId: '', date: '', timeSlot: '', vehicleType: '', notes: '' };
 
@@ -99,7 +108,7 @@ function BookingForm({ accessToken, onBooked }) {
             <option value="">Selecciona un servicio…</option>
             {services.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name} — {s.durationMinutes} min — ${Number(s.price).toFixed(2)} MXN
+                {s.name} — {s.durationMinutes} min
               </option>
             ))}
           </select>
@@ -164,6 +173,17 @@ function BookingForm({ accessToken, onBooked }) {
             ))}
           </select>
         </div>
+
+        {form.serviceId && form.vehicleType && (() => {
+          const svc = services.find((s) => s.id === parseInt(form.serviceId, 10));
+          const priceKey = VEHICLE_PRICE_KEY[form.vehicleType] ?? 'sedan';
+          const price = svc?.prices?.[priceKey];
+          return price != null ? (
+            <div className="alert alert-success" role="status" style={{ marginBottom: '1rem' }}>
+              Precio estimado: <strong>${Number(price).toFixed(0)} MXN</strong>
+            </div>
+          ) : null;
+        })()}
 
         <div className="form-group">
           <label htmlFor="notes">

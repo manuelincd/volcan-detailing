@@ -19,22 +19,34 @@ const users = [
 
 const services = [
   {
-    name: 'Lavado Básico',
-    description: 'Lavado exterior a mano, enjuague y secado. Incluye limpieza de llantas.',
+    name: 'Lavado Exterior',
+    description: 'Lavado a mano de carrocería, enjuague, secado y limpieza de rines y llantas.',
     durationMinutes: 30,
-    price: 180.00,
+    prices: { sedan: 120, suv: 160, van: 200 },
   },
   {
     name: 'Lavado Completo',
-    description: 'Lavado exterior más aspirado interior, limpieza de vidrios y limpieza del tablero.',
+    description: 'Lavado exterior más aspirado interior, limpieza de tablero, vidrios y tapetes.',
     durationMinutes: 60,
-    price: 320.00,
+    prices: { sedan: 250, suv: 320, van: 400 },
+  },
+  {
+    name: 'Detallado Profundo',
+    description: 'Lavado completo más desengrasado de motor, limpieza de plásticos y cera de carrocería.',
+    durationMinutes: 120,
+    prices: { sedan: 550, suv: 750, van: 950 },
+  },
+  {
+    name: 'Pulido y Encerado',
+    description: 'Corrección de pintura, eliminación de rayones leves, encerado profesional y sellador.',
+    durationMinutes: 180,
+    prices: { sedan: 900, suv: 1200, van: 1500 },
   },
   {
     name: 'Detallado Premium',
-    description: 'Lavado completo con tratamiento de arcilla, encerado a mano, acondicionamiento de piel y eliminación de olores.',
-    durationMinutes: 180,
-    price: 850.00,
+    description: 'Servicio completo: pulido, encerado, ozono para interiores, acondicionador de cuero y protección de pintura.',
+    durationMinutes: 240,
+    prices: { sedan: 1800, suv: 2400, van: 3000 },
   },
 ];
 
@@ -68,6 +80,7 @@ async function main() {
   }
 
   console.log('Seeding services…');
+  await prisma.appointment.deleteMany(); // clear FK dependents before replacing services
   await prisma.service.deleteMany();
   await prisma.service.createMany({ data: services });
 

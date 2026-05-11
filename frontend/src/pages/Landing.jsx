@@ -74,7 +74,7 @@ export default function Landing() {
                   </p>
                   <div className="service-card-footer">
                     <span className="service-card-price">
-                      ${Number(svc.price).toFixed(2)} MXN
+                      Desde ${Math.min(...Object.values(svc.prices).map(Number))} MXN
                     </span>
                     <span className="service-card-duration">{svc.durationMinutes} min</span>
                   </div>
@@ -82,6 +82,108 @@ export default function Landing() {
               ))}
             </div>
           )}
+        </div>
+      </section>
+
+      <div className="section-divider" />
+
+      {/* ── Categorías de vehículo ── */}
+      <section className="landing-section">
+        <div className="section-inner">
+          <div className="section-header">
+            <p className="section-eyebrow">Precios según tu vehículo</p>
+            <h2 className="section-title">¿QUÉ CATEGORÍA ES MI VEHÍCULO?</h2>
+          </div>
+
+          <div className="vehicle-category-grid">
+            {/* Sedán */}
+            <div
+              className="vehicle-category-card"
+              style={{ borderTop: '3px solid #d4a843' }}
+              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 8px 32px rgba(212,168,67,0.18)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.boxShadow = ''; }}
+            >
+              <div className="vehicle-category-header">
+                <div className="vehicle-category-meta">
+                  <p className="vehicle-category-name">Sedán / Hatchback</p>
+                  <span className="vehicle-category-tier" style={{ color: '#d4a843' }}>Precio base</span>
+                </div>
+              </div>
+              <ul className="vehicle-list">
+                <li>Nissan Versa</li>
+                <li>Nissan March</li>
+                <li>Chevrolet Aveo</li>
+                <li>Volkswagen Vento</li>
+                <li>Volkswagen Polo</li>
+                <li>Toyota Corolla</li>
+                <li>Honda Civic</li>
+                <li>Kia Rio</li>
+                <li>Hyundai Grand i10</li>
+                <li>Seat Ibiza</li>
+                <li>Chevrolet Spark</li>
+                <li>Renault Kwid</li>
+                <li>Nissan Sentra</li>
+              </ul>
+            </div>
+
+            {/* SUV */}
+            <div
+              className="vehicle-category-card"
+              style={{ borderTop: '3px solid #e09a4a' }}
+              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 8px 32px rgba(224,154,74,0.18)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.boxShadow = ''; }}
+            >
+              <div className="vehicle-category-header">
+                <div className="vehicle-category-meta">
+                  <p className="vehicle-category-name">SUV / Camioneta</p>
+                  <span className="vehicle-category-tier" style={{ color: '#e09a4a' }}>Precio medio</span>
+                </div>
+              </div>
+              <ul className="vehicle-list">
+                <li>Nissan X-Trail</li>
+                <li>Nissan Kicks</li>
+                <li>Chevrolet Equinox</li>
+                <li>Toyota RAV4</li>
+                <li>Honda CR-V</li>
+                <li>Kia Sportage</li>
+                <li>Hyundai Tucson</li>
+                <li>Volkswagen Tiguan</li>
+                <li>Ford Territory</li>
+                <li>Jeep Compass</li>
+                <li>Mazda CX-5</li>
+                <li>Toyota Hilux (cabina sencilla)</li>
+                <li>Nissan NP300 (cabina sencilla)</li>
+              </ul>
+            </div>
+
+            {/* Van */}
+            <div
+              className="vehicle-category-card"
+              style={{ borderTop: '3px solid #d0573c' }}
+              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 8px 32px rgba(208,87,60,0.18)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.boxShadow = ''; }}
+            >
+              <div className="vehicle-category-header">
+                <div className="vehicle-category-meta">
+                  <p className="vehicle-category-name">Van / Pickup doble</p>
+                  <span className="vehicle-category-tier" style={{ color: '#d0573c' }}>Precio mayor</span>
+                </div>
+              </div>
+              <ul className="vehicle-list">
+                <li>Toyota Hiace</li>
+                <li>Nissan Urvan</li>
+                <li>Chevrolet Express</li>
+                <li>Ford Transit</li>
+                <li>Toyota Land Cruiser</li>
+                <li>Ford F-150</li>
+                <li>Chevrolet Silverado</li>
+                <li>Ram 1500</li>
+                <li>Toyota Tundra</li>
+                <li>Nissan Frontier (doble cabina)</li>
+                <li>Toyota Hilux (doble cabina)</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </section>
 

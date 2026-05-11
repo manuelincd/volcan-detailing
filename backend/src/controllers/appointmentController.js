@@ -23,9 +23,20 @@ const ALLOWED_TRANSITIONS = {
 
 // Shared include shape used by all read responses
 const INCLUDE = {
-  service:  { select: { id: true, name: true, durationMinutes: true, price: true } },
+  service:  { select: { id: true, name: true, durationMinutes: true, prices: true } },
   client:   { select: { id: true, name: true, phone: true } },
   employee: { select: { id: true, name: true } },
+};
+
+// Maps the vehicle type strings (from the booking form) to the price tier key
+// stored in service.prices. Unknown types default to sedan.
+const VEHICLE_PRICE_KEY = {
+  'Sedán/Hatchback': 'sedan',
+  'SUV':             'suv',
+  'Camioneta':       'suv',
+  'Van':             'van',
+  'Motocicleta':     'sedan',
+  'Pickup doble':    'van',
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -90,8 +101,11 @@ exports.create = async (req, res, next) => {
     });
     if (conflict) return fail(res, 'Time slot is already booked', 'SLOT_TAKEN', 409);
 
+    const priceKey = VEHICLE_PRICE_KEY[vehicleType] ?? 'sedan';
+    const resolvedPrice = service.prices[priceKey];
+
     const appointment = await prisma.appointment.create({
-      data: { clientId: req.user.sub, serviceId, vehicleType, date: new Date(date), timeSlot, notes },
+      data: { clientId: req.user.sub, serviceId, vehicleType, resolvedPrice, date: new Date(date), timeSlot, notes },
       include: INCLUDE,
     });
     ok(res, appointment, 201);

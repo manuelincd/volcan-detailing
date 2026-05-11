@@ -445,3 +445,38 @@ simultaneously — to maintain a session. This is left as a post-MVP improvement
   returned user object.
 - `src/schemas/authSchema.js` — `mfaVerifySetup` and `mfaValidate` require `token`
   to match `/^\d{6}$/`; `mfaDisable` requires a non-empty `password` string.
+
+---
+
+## 11. Appointment price is resolved and stored at booking time
+
+**Decision:** When a client creates an appointment, the controller looks up the
+service's `prices` JSON (`{ sedan, suv, van }`) and writes the applicable tier
+into a `resolvedPrice` column on the `Appointment` row. The stored price is never
+recalculated from the live service record.
+
+**Rationale:** Service prices can change at any time via the admin panel. Without
+snapshotting the price at booking time, a price increase would silently retroact
+to all pending and confirmed appointments that were booked at the original rate.
+This would be both surprising to clients and potentially a liability issue.
+
+Storing `resolvedPrice` at creation means:
+- What the client sees in the confirmation is what they owe, regardless of
+  subsequent price changes.
+- Historical reporting (revenue, average ticket) reflects what was actually charged,
+  not the current catalogue price.
+- Auditors can reconstruct the price tier that was in effect at the time of each
+  booking without needing to inspect the audit log.
+
+`resolvedPrice` is nullable so that the migration does not require a data-backfill
+for pre-existing appointments that were created before this feature was introduced.
+
+**Implementation:**
+- `prisma/schema.prisma` — `resolvedPrice Decimal? @db.Decimal(10,2) @map("resolved_price")`
+  on `Appointment`; `prices Json` replaces the old `price Decimal` on `Service`.
+- `prisma/migrations/20260510180000_replace_price_with_prices_json/migration.sql` —
+  drops `price`, adds `prices JSONB` with a temporary `DEFAULT` for existing rows
+  (removed immediately after), adds `resolved_price` as nullable.
+- `src/controllers/appointmentController.js` — `VEHICLE_PRICE_KEY` map converts the
+  booking form's vehicle type string to the `sedan | suv | van` tier key; the resolved
+  value is written into the `create` payload.

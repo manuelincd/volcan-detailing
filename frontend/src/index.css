@@ -1031,3 +1031,88 @@ textarea {
 .mt-2           { margin-top: var(--space-2); }
 .mt-3           { margin-top: var(--space-3); }
 .mt-4           { margin-top: var(--space-4); }
+
+/* ─── Landing — vehicle categories ───────────────────────────── */
+.vehicle-category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.vehicle-category-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  transition:
+    box-shadow var(--transition),
+    transform var(--transition),
+    border-color var(--transition);
+}
+
+.vehicle-category-card:hover {
+  transform: translateY(-3px);
+}
+
+.vehicle-category-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.vehicle-category-icon {
+  font-size: 2rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.vehicle-category-meta { flex: 1; min-width: 0; }
+
+.vehicle-category-name {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  margin-bottom: var(--space-2);
+}
+
+.vehicle-category-tier {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid currentColor;
+  opacity: 0.85;
+}
+
+.vehicle-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-1) var(--space-3);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.vehicle-list li {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+  padding-left: var(--space-3);
+  position: relative;
+}
+
+.vehicle-list li::before {
+  content: '·';
+  position: absolute;
+  left: 0;
+  color: var(--color-text-muted);
+}

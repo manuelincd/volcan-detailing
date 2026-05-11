@@ -7,7 +7,10 @@
     "dev": "nodemon src/app.js",
     "start": "node src/app.js",
     "lint": "eslint src/",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand --coverage",
+    "test:watch": "jest --watch --runInBand",
+    "test:unit": "jest --runInBand --testPathPattern=unit",
+    "test:integration": "jest --runInBand --testPathPattern=integration"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -27,7 +30,25 @@
     "seed": "node prisma/seed.js"
   },
   "devDependencies": {
+    "jest": "^29.7.0",
     "nodemon": "^3.1.9",
-    "prisma": "^5.22.0"
+    "prisma": "^5.22.0",
+    "supertest": "^7.2.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ],
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/config/**"
+    ],
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ]
   }
 }

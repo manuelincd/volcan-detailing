@@ -2,7 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { serviceService } from '../../services/serviceService';
 
-const EMPTY_FORM = { name: '', description: '', durationMinutes: '', price: '' };
+const EMPTY_FORM = {
+  name: '', description: '', durationMinutes: '',
+  priceSedan: '', priceSuv: '', priceVan: '',
+};
 
 export default function ServicesTab() {
   const { accessToken } = useAuth();
@@ -39,7 +42,9 @@ export default function ServicesTab() {
       name:            svc.name,
       description:     svc.description ?? '',
       durationMinutes: String(svc.durationMinutes),
-      price:           String(svc.price),
+      priceSedan:      String(svc.prices?.sedan ?? ''),
+      priceSuv:        String(svc.prices?.suv   ?? ''),
+      priceVan:        String(svc.prices?.van   ?? ''),
     });
     setFormError('');
     setShowForm(true);
@@ -59,7 +64,11 @@ export default function ServicesTab() {
       name:            form.name.trim(),
       description:     form.description.trim() || undefined,
       durationMinutes: parseInt(form.durationMinutes, 10),
-      price:           parseFloat(form.price),
+      prices: {
+        sedan: parseFloat(form.priceSedan),
+        suv:   parseFloat(form.priceSuv),
+        van:   parseFloat(form.priceVan),
+      },
       ...(editing && { isActive: editing.isActive }),
     };
 
@@ -142,37 +151,76 @@ export default function ServicesTab() {
               />
             </div>
 
-            <div className="form-2col">
-              <div className="form-group">
-                <label htmlFor="svc-duration">Duración (minutos)</label>
-                <input
-                  id="svc-duration"
-                  type="number"
-                  min="1"
-                  max="1440"
-                  value={form.durationMinutes}
-                  onChange={setField('durationMinutes')}
-                  placeholder="60"
-                  required
-                  disabled={submitting}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="svc-price">Precio (MXN)</label>
-                <input
-                  id="svc-price"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={form.price}
-                  onChange={setField('price')}
-                  placeholder="0.00"
-                  required
-                  disabled={submitting}
-                />
-              </div>
+            <div className="form-group">
+              <label htmlFor="svc-duration">Duración (minutos)</label>
+              <input
+                id="svc-duration"
+                type="number"
+                min="1"
+                max="1440"
+                value={form.durationMinutes}
+                onChange={setField('durationMinutes')}
+                placeholder="60"
+                required
+                disabled={submitting}
+                style={{ maxWidth: 160 }}
+              />
             </div>
+
+            <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+              <legend style={{
+                fontSize: '0.875rem',
+                fontWeight: 600,
+                color: 'var(--color-text-secondary)',
+                marginBottom: '0.5rem',
+              }}>
+                Precios por tipo de vehículo (MXN)
+              </legend>
+              <div className="form-2col" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                <div className="form-group">
+                  <label htmlFor="svc-price-sedan">Sedán / Hatchback</label>
+                  <input
+                    id="svc-price-sedan"
+                    type="number"
+                    min="0.01"
+                    step="1"
+                    value={form.priceSedan}
+                    onChange={setField('priceSedan')}
+                    placeholder="120"
+                    required
+                    disabled={submitting}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="svc-price-suv">SUV / Camioneta</label>
+                  <input
+                    id="svc-price-suv"
+                    type="number"
+                    min="0.01"
+                    step="1"
+                    value={form.priceSuv}
+                    onChange={setField('priceSuv')}
+                    placeholder="160"
+                    required
+                    disabled={submitting}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="svc-price-van">Van / Pickup</label>
+                  <input
+                    id="svc-price-van"
+                    type="number"
+                    min="0.01"
+                    step="1"
+                    value={form.priceVan}
+                    onChange={setField('priceVan')}
+                    placeholder="200"
+                    required
+                    disabled={submitting}
+                  />
+                </div>
+              </div>
+            </fieldset>
 
             <div className="panel-actions">
               <button
@@ -200,48 +248,55 @@ export default function ServicesTab() {
               <th>Nombre</th>
               <th>Descripción</th>
               <th>Duración</th>
-              <th>Precio</th>
+              <th>Precios</th>
               <th>Estado</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {services.map((svc) => (
-              <tr key={svc.id}>
-                <td className="td-primary">{svc.name}</td>
-                <td className="td-desc">
-                  <span className="line-clamp-2">{svc.description ?? '—'}</span>
-                </td>
-                <td>{svc.durationMinutes} min</td>
-                <td className="td-accent">${Number(svc.price).toFixed(2)} MXN</td>
-                <td>
-                  <span className={svc.isActive ? 'badge badge-active' : 'badge badge-inactive'}>
-                    {svc.isActive ? 'Activo' : 'Inactivo'}
-                  </span>
-                </td>
-                <td>
-                  <div className="table-actions">
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => openEdit(svc)}
-                    >
-                      Editar
-                    </button>
-                    {svc.isActive && (
+            {services.map((svc) => {
+              const vals = svc.prices ? Object.values(svc.prices).map(Number) : [];
+              const minP = vals.length ? Math.min(...vals) : 0;
+              const maxP = vals.length ? Math.max(...vals) : 0;
+              return (
+                <tr key={svc.id}>
+                  <td className="td-primary">{svc.name}</td>
+                  <td className="td-desc">
+                    <span className="line-clamp-2">{svc.description ?? '—'}</span>
+                  </td>
+                  <td>{svc.durationMinutes} min</td>
+                  <td className="td-accent">
+                    ${minP} — ${maxP} MXN
+                  </td>
+                  <td>
+                    <span className={svc.isActive ? 'badge badge-active' : 'badge badge-inactive'}>
+                      {svc.isActive ? 'Activo' : 'Inactivo'}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="table-actions">
                       <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => handleRemove(svc)}
-                        disabled={removing === svc.id}
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => openEdit(svc)}
                       >
-                        {removing === svc.id
-                          ? <><span className="spinner" /> Desactivando…</>
-                          : 'Desactivar'}
+                        Editar
                       </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      {svc.isActive && (
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleRemove(svc)}
+                          disabled={removing === svc.id}
+                        >
+                          {removing === svc.id
+                            ? <><span className="spinner" /> Desactivando…</>
+                            : 'Desactivar'}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
