@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Link, Navigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
 import { serviceService } from '../services/serviceService';
 import Navbar from '../components/Navbar';
 
 export default function Landing() {
-  const { user, loading } = useAuth();
   const [services,        setServices]        = useState([]);
   const [servicesLoading, setServicesLoading] = useState(true);
 
@@ -15,9 +13,6 @@ export default function Landing() {
       .catch(() => {})
       .finally(() => setServicesLoading(false));
   }, []);
-
-  if (!loading && user) return <Navigate to={`/${user.role}`} replace />;
-  if (loading) return null;
 
   return (
     <div>

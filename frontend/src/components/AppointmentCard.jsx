@@ -30,6 +30,12 @@ export default function AppointmentCard({ appointment: a, onCancel, cancelling }
               </>
             )}
           </div>
+          <p className="appointment-price">
+            Precio estimado:{' '}
+            {a.resolvedPrice != null
+              ? <strong>${Number(a.resolvedPrice).toFixed(0)} MXN</strong>
+              : '—'}
+          </p>
         </div>
         <span className={`badge badge-${a.status}`}>{STATUS_LABELS[a.status] ?? a.status}</span>
       </div>

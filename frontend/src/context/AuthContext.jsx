@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { setRefresher } from '../services/api';
 
@@ -8,6 +9,7 @@ export function AuthProvider({ children }) {
   const [user, setUser]               = useState(null);
   const [accessToken, setAccessToken] = useState(null);
   const [loading, setLoading]         = useState(true);
+  const navigate                      = useNavigate();
 
   const login = useCallback(async (email, password) => {
     const { data } = await authService.login(email, password);
@@ -34,7 +36,8 @@ export function AuthProvider({ children }) {
     try { await authService.logout(); } catch { /* cookie cleared server-side regardless */ }
     setUser(null);
     setAccessToken(null);
-  }, []);
+    navigate('/login', { replace: true });
+  }, [navigate]);
 
   const refreshToken = useCallback(async () => {
     const { data } = await authService.refresh();

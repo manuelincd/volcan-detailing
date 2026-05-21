@@ -591,6 +591,12 @@ textarea {
 
 .appointment-meta-sep { color: var(--color-text-muted); }
 
+.appointment-price {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-1);
+}
+
 .appointment-notes {
   font-size: var(--text-sm);
   color: var(--color-text-muted);
@@ -1115,4 +1121,150 @@ textarea {
   position: absolute;
   left: 0;
   color: var(--color-text-muted);
+}
+
+/* ─── Client Dashboard — Welcome banner ────────────────────────── */
+.welcome-banner {
+  background: linear-gradient(135deg, var(--color-bg-surface) 0%, rgba(212,168,67,0.05) 100%);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.welcome-heading {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  margin-bottom: var(--space-3);
+}
+
+.next-appointment-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.next-appointment-text {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  flex: 1;
+  min-width: 0;
+}
+
+/* ─── Client Dashboard — Packages section ──────────────────────── */
+.packages-section { margin-bottom: var(--space-6); }
+
+.packages-loading { margin-bottom: var(--space-6); }
+
+.section-heading {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  margin-bottom: var(--space-4);
+  color: var(--color-text-primary);
+}
+
+.section-heading--appointments { margin-top: var(--space-8); }
+
+.packages-scroll {
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+  padding-bottom: var(--space-3);
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.packages-scroll::-webkit-scrollbar { height: 4px; }
+.packages-scroll::-webkit-scrollbar-track { background: transparent; }
+.packages-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
+}
+
+.package-card {
+  flex: 0 0 210px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--color-accent);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  scroll-snap-align: start;
+  transition:
+    box-shadow var(--transition),
+    transform var(--transition);
+}
+
+.package-card:hover {
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-2px);
+}
+
+.package-card-name {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.package-card-duration {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.package-card-price {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-accent);
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  margin-bottom: var(--space-3);
+}
+
+/* ─── Client Dashboard — Vehicle categories (compact) ──────────── */
+.vehicle-categories-section { margin-bottom: var(--space-6); }
+
+.vehicle-categories-compact {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+
+@media (max-width: 768px) {
+  .vehicle-categories-compact { grid-template-columns: 1fr; }
+}
+
+.vehicle-category-card--compact { padding: var(--space-4); }
+
+.vehicle-category-card--compact .vehicle-category-header {
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+
+.vehicle-category-card--compact .vehicle-category-name { font-size: 1rem; }
+
+.vehicle-category-card--highlighted {
+  border-color: rgba(212, 168, 67, 0.45);
+  box-shadow: 0 0 20px rgba(212, 168, 67, 0.14);
+}
+
+.vehicle-category-tier-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-1);
+}
+
+.vehicle-list-more {
+  font-size: 0.75rem;
+  color: var(--color-text-muted) !important;
+  font-style: italic;
 }

@@ -5,7 +5,7 @@ import { availabilityService } from '../services/availabilityService';
 import { serviceService }      from '../services/serviceService';
 import AppointmentCard from '../components/AppointmentCard';
 import Navbar from '../components/Navbar';
-import { localToday, localMaxDate } from '../utils/dateHelpers';
+import { localToday, localMaxDate, formatDate, toDateString } from '../utils/dateHelpers';
 
 const VEHICLE_TYPES = ['Sedán/Hatchback', 'SUV', 'Camioneta', 'Van', 'Motocicleta', 'Pickup doble', 'Otro'];
 
@@ -17,12 +17,198 @@ const VEHICLE_PRICE_KEY = {
   'Motocicleta':     'sedan',
   'Pickup doble':    'van',
 };
+
 const MAX_DAYS = 30;
 const EMPTY_FORM = { serviceId: '', date: '', timeSlot: '', vehicleType: '', notes: '' };
 
+const STATUS_LABELS = {
+  pending:     'Pendiente',
+  confirmed:   'Confirmada',
+  in_progress: 'En proceso',
+  completed:   'Completada',
+  cancelled:   'Cancelada',
+};
+
+const UPCOMING_STATUSES = new Set(['pending', 'confirmed', 'in_progress']);
+
+const VEHICLE_CATEGORIES = [
+  {
+    id:     'sedan',
+    name:   'Sedán / Hatchback',
+    tier:   'Precio base',
+    color:  '#d4a843',
+    types:  ['Sedán/Hatchback', 'Motocicleta'],
+    models: ['Nissan Versa', 'Chevrolet Aveo', 'Volkswagen Vento', 'Honda Civic'],
+  },
+  {
+    id:     'suv',
+    name:   'SUV / Camioneta',
+    tier:   'Precio medio',
+    color:  '#e09a4a',
+    types:  ['SUV', 'Camioneta'],
+    models: ['Nissan X-Trail', 'Toyota RAV4', 'Kia Sportage', 'Volkswagen Tiguan'],
+  },
+  {
+    id:     'van',
+    name:   'Van / Pickup doble',
+    tier:   'Precio mayor',
+    color:  '#d0573c',
+    types:  ['Van', 'Pickup doble'],
+    models: ['Toyota Hiace', 'Nissan Urvan', 'Ford F-150', 'Ram 1500'],
+  },
+];
+
+// ─── Welcome banner ────────────────────────────────────────────────────────────
+
+function WelcomeBanner({ user, appointments, loading, onBookNow }) {
+  const today = localToday();
+
+  const nextAppointment = loading ? null : (
+    appointments
+      .filter((a) => UPCOMING_STATUSES.has(a.status) && toDateString(a.date) >= today)
+      .sort((a, b) => {
+        const da = toDateString(a.date) + a.timeSlot;
+        const db = toDateString(b.date) + b.timeSlot;
+        return da < db ? -1 : da > db ? 1 : 0;
+      })[0] ?? null
+  );
+
+  return (
+    <div className="welcome-banner">
+      <h2 className="welcome-heading">
+        Bienvenido, <span className="text-accent">{user?.name}</span>
+      </h2>
+      {loading ? (
+        <div className="loading-state loading-state-sm">
+          <span className="spinner" /><span>Cargando…</span>
+        </div>
+      ) : nextAppointment ? (
+        <div className="next-appointment-row">
+          <p className="next-appointment-text">
+            Tu próxima cita:{' '}
+            <strong>{nextAppointment.service?.name}</strong>
+            {' el '}
+            <strong>{formatDate(nextAppointment.date)}</strong>
+            {' a las '}
+            <strong>{nextAppointment.timeSlot}</strong>
+          </p>
+          <span className={`badge badge-${nextAppointment.status}`}>
+            {STATUS_LABELS[nextAppointment.status] ?? nextAppointment.status}
+          </span>
+        </div>
+      ) : (
+        <div className="next-appointment-row">
+          <p className="next-appointment-text">
+            No tienes citas próximas. ¡Agenda una ahora!
+          </p>
+          <button className="btn btn-primary btn-sm" onClick={onBookNow}>
+            Reservar cita
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Packages section ─────────────────────────────────────────────────────────
+
+function PackagesSection({ onSelectService }) {
+  const [services, setServices] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+
+  useEffect(() => {
+    serviceService.list()
+      .then((res) => setServices(res.data.data.filter((s) => s.isActive)))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <div className="loading-state loading-state-sm packages-loading">
+      <span className="spinner" /><span>Cargando paquetes…</span>
+    </div>
+  );
+  if (!services.length) return null;
+
+  return (
+    <div className="packages-section">
+      <h2 className="section-heading">Nuestros paquetes</h2>
+      <div className="packages-scroll">
+        {services.map((svc) => {
+          const minPrice = Math.min(...Object.values(svc.prices).map(Number));
+          return (
+            <div key={svc.id} className="package-card">
+              <p className="package-card-name">{svc.name}</p>
+              <p className="package-card-duration">{svc.durationMinutes} min</p>
+              <p className="package-card-price">Desde ${minPrice.toFixed(0)} MXN</p>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => onSelectService(svc.id)}
+              >
+                Agendar
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Vehicle categories section ────────────────────────────────────────────────
+
+function VehicleCategoriesSection({ appointments }) {
+  const lastVehicleType = [...appointments]
+    .sort((a, b) => {
+      const da = toDateString(a.date) + a.timeSlot;
+      const db = toDateString(b.date) + b.timeSlot;
+      return db < da ? -1 : db > da ? 1 : 0;
+    })[0]?.vehicleType ?? null;
+
+  const highlightedId = lastVehicleType
+    ? (VEHICLE_CATEGORIES.find((c) => c.types.includes(lastVehicleType))?.id ?? null)
+    : null;
+
+  return (
+    <div className="vehicle-categories-section">
+      <h2 className="section-heading">Categorías de vehículo</h2>
+      <div className="vehicle-categories-compact">
+        {VEHICLE_CATEGORIES.map((cat) => {
+          const highlighted = cat.id === highlightedId;
+          return (
+            <div
+              key={cat.id}
+              className={`vehicle-category-card vehicle-category-card--compact${highlighted ? ' vehicle-category-card--highlighted' : ''}`}
+              style={{ borderTop: `3px solid ${cat.color}` }}
+            >
+              <div className="vehicle-category-header">
+                <div className="vehicle-category-meta">
+                  <p className="vehicle-category-name">{cat.name}</p>
+                  <div className="vehicle-category-tier-row">
+                    <span className="vehicle-category-tier" style={{ color: cat.color }}>
+                      {cat.tier}
+                    </span>
+                    {highlighted && (
+                      <span className="badge badge-admin">Tu vehículo</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <ul className="vehicle-list">
+                {cat.models.map((m) => <li key={m}>{m}</li>)}
+                <li className="vehicle-list-more">y más…</li>
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Booking form ─────────────────────────────────────────────────────────────
 
-function BookingForm({ accessToken, onBooked }) {
+function BookingForm({ accessToken, onBooked, selectedServiceId }) {
   const [services,     setServices]     = useState([]);
   const [form,         setForm]         = useState(EMPTY_FORM);
   const [slots,        setSlots]        = useState([]);
@@ -37,6 +223,12 @@ function BookingForm({ accessToken, onBooked }) {
       .then((res) => setServices(res.data.data))
       .catch(() => setError('No se pudieron cargar los servicios.'));
   }, []);
+
+  useEffect(() => {
+    if (selectedServiceId != null) {
+      setForm((f) => ({ ...f, serviceId: String(selectedServiceId) }));
+    }
+  }, [selectedServiceId]);
 
   const setField = (field) => (e) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
@@ -214,35 +406,7 @@ function BookingForm({ accessToken, onBooked }) {
 
 // ─── Appointments list ────────────────────────────────────────────────────────
 
-function AppointmentsList({ accessToken, refreshKey }) {
-  const [appointments, setAppointments] = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [error,        setError]        = useState('');
-  const [cancelling,   setCancelling]   = useState(null);
-
-  const load = useCallback(() => {
-    setLoading(true);
-    appointmentService.list(accessToken)
-      .then((res) => setAppointments(res.data.data))
-      .catch(() => setError('No se pudieron cargar las citas.'))
-      .finally(() => setLoading(false));
-  }, [accessToken]);
-
-  useEffect(() => { load(); }, [load, refreshKey]);
-
-  const handleCancel = async (id) => {
-    if (!window.confirm('¿Cancelar esta cita?')) return;
-    setCancelling(id);
-    try {
-      const res = await appointmentService.update(accessToken, id, { status: 'cancelled' });
-      setAppointments((prev) => prev.map((a) => (a.id === id ? res.data.data : a)));
-    } catch (err) {
-      setError(err.response?.data?.message ?? 'No se pudo cancelar la cita.');
-    } finally {
-      setCancelling(null);
-    }
-  };
-
+function AppointmentsList({ appointments, loading, error, onCancel, cancelling }) {
   if (loading) return (
     <div className="loading-state">
       <span className="spinner" /><span>Cargando citas…</span>
@@ -259,7 +423,7 @@ function AppointmentsList({ accessToken, refreshKey }) {
         <AppointmentCard
           key={a.id}
           appointment={a}
-          onCancel={handleCancel}
+          onCancel={onCancel}
           cancelling={cancelling === a.id}
         />
       ))}
@@ -275,13 +439,48 @@ const TABS = [
 ];
 
 export default function ClientDashboard() {
-  const { accessToken } = useAuth();
-  const [tab,        setTab]        = useState('appointments');
-  const [refreshKey, setRefreshKey] = useState(0);
+  const { user, accessToken } = useAuth();
+  const [tab,               setTab]               = useState('appointments');
+  const [selectedServiceId, setSelectedServiceId] = useState(null);
+  const [refreshKey,        setRefreshKey]        = useState(0);
+
+  const [appointments, setAppointments] = useState([]);
+  const [apptLoading,  setApptLoading]  = useState(true);
+  const [apptError,    setApptError]    = useState('');
+  const [cancelling,   setCancelling]   = useState(null);
+
+  const loadAppointments = useCallback(() => {
+    setApptLoading(true);
+    appointmentService.list(accessToken)
+      .then((res) => setAppointments(res.data.data))
+      .catch(() => setApptError('No se pudieron cargar las citas.'))
+      .finally(() => setApptLoading(false));
+  }, [accessToken]);
+
+  useEffect(() => { loadAppointments(); }, [loadAppointments, refreshKey]);
+
+  const handleCancel = async (id) => {
+    if (!window.confirm('¿Cancelar esta cita?')) return;
+    setCancelling(id);
+    try {
+      const res = await appointmentService.update(accessToken, id, { status: 'cancelled' });
+      setAppointments((prev) => prev.map((a) => (a.id === id ? res.data.data : a)));
+    } catch (err) {
+      setApptError(err.response?.data?.message ?? 'No se pudo cancelar la cita.');
+    } finally {
+      setCancelling(null);
+    }
+  };
 
   const handleBooked = () => {
     setRefreshKey((k) => k + 1);
+    setSelectedServiceId(null);
     setTab('appointments');
+  };
+
+  const handleSelectService = (serviceId) => {
+    setSelectedServiceId(serviceId);
+    setTab('book');
   };
 
   return (
@@ -307,10 +506,31 @@ export default function ClientDashboard() {
 
         <section>
           {tab === 'appointments' && (
-            <AppointmentsList accessToken={accessToken} refreshKey={refreshKey} />
+            <>
+              <WelcomeBanner
+                user={user}
+                appointments={appointments}
+                loading={apptLoading}
+                onBookNow={() => { setSelectedServiceId(null); setTab('book'); }}
+              />
+              <PackagesSection onSelectService={handleSelectService} />
+              <VehicleCategoriesSection appointments={appointments} />
+              <h2 className="section-heading section-heading--appointments">Mis citas</h2>
+              <AppointmentsList
+                appointments={appointments}
+                loading={apptLoading}
+                error={apptError}
+                onCancel={handleCancel}
+                cancelling={cancelling}
+              />
+            </>
           )}
           {tab === 'book' && (
-            <BookingForm accessToken={accessToken} onBooked={handleBooked} />
+            <BookingForm
+              accessToken={accessToken}
+              onBooked={handleBooked}
+              selectedServiceId={selectedServiceId}
+            />
           )}
         </section>
       </main>

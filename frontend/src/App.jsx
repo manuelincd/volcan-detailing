@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
@@ -9,11 +10,18 @@ import EmployeeDashboard from './pages/EmployeeDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import Profile from './pages/ChangePassword';
 
+function RootRedirect() {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="page-loader"><span className="spinner" /></div>;
+  if (user)    return <Navigate to={`/${user.role}`} replace />;
+  return <Landing />;
+}
+
 export default function App() {
   return (
     <Routes>
       {/* Public */}
-      <Route path="/"             element={<Landing />} />
+      <Route path="/"             element={<RootRedirect />} />
       <Route path="/login"        element={<Login />} />
       <Route path="/register"     element={<Register />} />
       <Route path="/unauthorized" element={<Unauthorized />} />
