@@ -17,6 +17,13 @@ exports.list = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+exports.listAll = async (req, res, next) => {
+  try {
+    const services = await prisma.service.findMany({ orderBy: { name: 'asc' } });
+    ok(res, services);
+  } catch (err) { next(err); }
+};
+
 exports.create = async (req, res, next) => {
   try {
     // Whitelist fields explicitly — isActive is always true on creation

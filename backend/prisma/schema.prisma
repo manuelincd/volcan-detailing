@@ -97,3 +97,14 @@ model Appointment {
   @@index([status])
   @@map("appointments")
 }
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  type      String   @db.VarChar(50)
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([type])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

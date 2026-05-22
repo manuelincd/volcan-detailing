@@ -17,15 +17,16 @@ export default function ServicesTab() {
   const [form,       setForm]       = useState(EMPTY_FORM);
   const [formError,  setFormError]  = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [removing,   setRemoving]   = useState(null);
+  const [removing,     setRemoving]     = useState(null);
+  const [reactivating, setReactivating] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
-    serviceService.list()
+    serviceService.listAll(accessToken)
       .then((res) => setServices(res.data.data))
       .catch(() => setError('No se pudieron cargar los servicios.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [accessToken]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -97,6 +98,25 @@ export default function ServicesTab() {
       setError(err.response?.data?.message ?? 'No se pudo desactivar el servicio.');
     } finally {
       setRemoving(null);
+    }
+  };
+
+  const handleReactivate = async (svc) => {
+    setReactivating(svc.id);
+    try {
+      const payload = {
+        name:            svc.name,
+        description:     svc.description ?? undefined,
+        durationMinutes: svc.durationMinutes,
+        prices:          { sedan: svc.prices.sedan, suv: svc.prices.suv, van: svc.prices.van },
+        isActive:        true,
+      };
+      const res = await serviceService.update(accessToken, svc.id, payload);
+      setServices((prev) => prev.map((s) => (s.id === svc.id ? res.data.data : s)));
+    } catch (err) {
+      setError(err.response?.data?.message ?? 'No se pudo reactivar el servicio.');
+    } finally {
+      setReactivating(null);
     }
   };
 
@@ -259,7 +279,7 @@ export default function ServicesTab() {
               const minP = vals.length ? Math.min(...vals) : 0;
               const maxP = vals.length ? Math.max(...vals) : 0;
               return (
-                <tr key={svc.id}>
+                <tr key={svc.id} className={svc.isActive ? '' : 'tr-inactive'}>
                   <td className="td-primary">{svc.name}</td>
                   <td className="td-desc">
                     <span className="line-clamp-2">{svc.description ?? '—'}</span>
@@ -281,7 +301,7 @@ export default function ServicesTab() {
                       >
                         Editar
                       </button>
-                      {svc.isActive && (
+                      {svc.isActive ? (
                         <button
                           className="btn btn-danger btn-sm"
                           onClick={() => handleRemove(svc)}
@@ -290,6 +310,16 @@ export default function ServicesTab() {
                           {removing === svc.id
                             ? <><span className="spinner" /> Desactivando…</>
                             : 'Desactivar'}
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-sm btn-reactivate"
+                          onClick={() => handleReactivate(svc)}
+                          disabled={reactivating === svc.id}
+                        >
+                          {reactivating === svc.id
+                            ? <><span className="spinner" /> Reactivando…</>
+                            : 'Reactivar'}
                         </button>
                       )}
                     </div>

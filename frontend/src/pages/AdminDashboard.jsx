@@ -3,11 +3,13 @@ import Navbar from '../components/Navbar';
 import AppointmentsTab from '../components/admin/AppointmentsTab';
 import UsersTab from '../components/admin/UsersTab';
 import ServicesTab from '../components/admin/ServicesTab';
+import AuditLogTab from '../components/admin/AuditLogTab';
 
 const TABS = [
-  { id: 'appointments', label: 'Citas'      },
-  { id: 'users',        label: 'Usuarios'   },
-  { id: 'services',     label: 'Servicios'  },
+  { id: 'appointments', label: 'Citas'                  },
+  { id: 'users',        label: 'Usuarios'               },
+  { id: 'services',     label: 'Servicios'              },
+  { id: 'audit',        label: 'Registro de actividad'  },
 ];
 
 export default function AdminDashboard() {
@@ -41,6 +43,7 @@ export default function AdminDashboard() {
           {activeTab === 'appointments' && <AppointmentsTab />}
           {activeTab === 'users'        && <UsersTab />}
           {activeTab === 'services'     && <ServicesTab />}
+          {activeTab === 'audit'        && <AuditLogTab />}
         </section>
       </main>
     </div>

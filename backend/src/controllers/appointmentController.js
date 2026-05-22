@@ -1,6 +1,7 @@
 const prisma = require('../config/db');
 const { ok, fail } = require('../utils/response');
 const { ROLES, APPOINTMENT_STATUS, CANCEL_CUTOFF_HOURS } = require('../config/constants');
+const log = require('../utils/logger');
 
 // Which status transitions each role may make.
 // Terminal states (completed, cancelled) intentionally have no entries.
@@ -174,6 +175,7 @@ exports.update = async (req, res, next) => {
       data:  { status: newStatus },
       include: INCLUDE,
     });
+    log.appointmentStatusChange(id, appointment.status, newStatus, sub, role);
     ok(res, updated);
   } catch (err) { next(err); }
 };
