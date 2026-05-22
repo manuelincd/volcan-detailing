@@ -1,242 +1,261 @@
-# Volcan Detailing – Appointment System MVP
-## Requirements Document
+# Volcán Detailing – Sistema de Citas MVP
+## Documento de Requerimientos
 
 ---
 
-## 1. Project Overview
+## 1. Descripción del Proyecto
 
-Web application for managing car wash appointments with role-based access control.
-The system allows clients to book appointments, employees to manage their assigned
-appointments, and administrators to oversee the entire operation.
+Aplicación web para la gestión de citas de un autolavado premium con control de acceso basado en roles. El sistema permite a los clientes consultar paquetes de servicio, registrarse y agendar citas en línea. Los empleados gestionan sus citas asignadas del día. El administrador tiene visibilidad y control total sobre usuarios, servicios y citas.
 
-**Development focus:** Secure software development practices including input validation,
-authentication, authorization, and protection against OWASP Top 10 vulnerabilities.
+**Enfoque de desarrollo:** Prácticas de desarrollo de software seguro que incluyen validación de entradas, autenticación, autorización y protección contra las vulnerabilidades del OWASP Top 10.
 
 ---
 
-## 2. User Roles
+## 2. Roles de Usuario
 
-### 2.1 Guest (Unauthenticated)
-- View available service packages and pricing
-- View business information (hours, location, contact)
-- Access registration and login pages
+### 2.1 Visitante (No autenticado)
+- Consultar paquetes de servicio disponibles y precios por categoría de vehículo
+- Ver información del negocio (horarios, ubicación, contacto)
+- Acceder a las páginas de registro e inicio de sesión
 
-### 2.2 Client (Authenticated)
-- Register and manage personal account
-- View available time slots
-- Create, view, and cancel own appointments
-- View appointment history
-- Receive appointment confirmation
+### 2.2 Cliente (Autenticado)
+- Registrarse y gestionar su cuenta personal
+- Consultar disponibilidad de horarios por fecha
+- Crear, visualizar y cancelar sus propias citas (hasta 2 horas antes)
+- Ver historial de citas con precios estimados
+- Activar autenticación de dos factores (MFA)
 
-### 2.3 Employee (Authenticated)
-- View assigned appointments for the day
-- Update appointment status: `pending → in_progress → completed`
-- View client information for assigned appointments
+### 2.3 Empleado (Autenticado)
+- Ver las citas asignadas del día en orden cronológico
+- Actualizar el estado de sus citas: `pendiente → en proceso → completada`
+- Ver información básica del cliente en cada cita asignada
 
-### 2.4 Administrator (Authenticated)
-- Full CRUD on employees and clients
-- View and manage all appointments
-- Configure available time slots and schedules
-- Manage service packages and pricing
-- View basic reports (appointments per day, status summary)
-
----
-
-## 3. Core Functional Requirements
-
-### 3.1 Authentication
-- User registration (clients only; employees created by admin)
-- Login with email and password
-- JWT-based session management with refresh tokens
-- Logout (token invalidation)
-- Password hashing with bcrypt (cost factor 12+)
-
-### 3.2 Appointments
-- Available slots based on configurable schedule
-- One appointment per time slot (no double booking)
-- Appointment fields: date, time, service type, vehicle type, status, assigned employee
-- Clients can cancel appointments up to 2 hours before scheduled time
-- Status flow: `pending → confirmed → in_progress → completed / cancelled`
-
-### 3.3 Services / Packages
-- Basic Wash
-- Full Wash
-- Premium Detailing
-- Each package has: name, description, duration (minutes), price
+### 2.4 Administrador (Autenticado)
+- CRUD completo de empleados y clientes
+- Ver y gestionar todas las citas del sistema
+- Configurar horarios y slots de disponibilidad
+- Gestionar paquetes de servicio y precios por categoría de vehículo
+- Activar, desactivar y editar usuarios
 
 ---
 
-## 4. Technical Stack
+## 3. Requerimientos Funcionales
 
-| Layer        | Technology         | Version  |
-|--------------|--------------------|----------|
-| Frontend     | React.js           | 18+      |
-| Routing      | React Router       | 6+       |
-| HTTP Client  | Axios              | latest   |
-| Backend      | Node.js + Express  | 20+ / 4+ |
-| ORM          | Prisma             | latest   |
-| Database     | PostgreSQL         | 15+      |
-| Auth         | JWT + bcrypt       | -        |
-| Validation   | Joi                | latest   |
-| Security     | Helmet.js          | latest   |
-| Rate Limit   | express-rate-limit | latest   |
-| Environment  | dotenv             | latest   |
+### 3.1 Autenticación
+- Registro de clientes con validación de contraseña segura
+- Inicio de sesión con correo electrónico y contraseña para todos los roles
+- Gestión de sesión mediante JWT con tokens de renovación
+- Cierre de sesión con invalidación del token
+- Hashing de contraseñas con bcrypt (cost factor 12)
+- Cambio de contraseña requiriendo contraseña actual
+- Autenticación de dos factores con Google Authenticator (TOTP)
+
+### 3.2 Citas
+- Slots disponibles basados en horario configurable por día de la semana
+- Una cita activa por horario (sin doble reserva)
+- Campos de cita: fecha, horario, tipo de servicio, tipo de vehículo, estado, empleado asignado, precio resuelto
+- Los clientes pueden cancelar hasta 2 horas antes del horario agendado
+- Flujo de estados: `pendiente → confirmada → en proceso → completada / cancelada`
+- El precio se guarda al momento de la reserva y no cambia con modificaciones posteriores al catálogo
+
+### 3.3 Servicios / Paquetes
+- Lavado Exterior
+- Lavado Completo
+- Detallado Profundo
+- Pulido y Encerado
+- Detallado Premium
+- Cada paquete tiene: nombre, descripción, duración en minutos, precios por categoría de vehículo (sedán, SUV, van)
 
 ---
 
-## 5. Security Requirements
+## 4. Stack Tecnológico
 
-### 5.1 Authentication & Authorization
-- JWT tokens must be signed with HS256 and a strong secret (min 32 chars)
-- Access token expiry: 15 minutes
-- Refresh token expiry: 7 days
-- Refresh tokens stored in HttpOnly cookies (not localStorage)
-- Every protected endpoint must validate JWT and check role via middleware
-- Role must be verified server-side on every request, never trusted from client
+| Capa | Tecnología | Versión |
+|---|---|---|
+| Frontend | React.js | 18+ |
+| Enrutamiento | React Router | 6+ |
+| Cliente HTTP | Axios | latest |
+| Backend | Node.js + Express | 20+ / 4+ |
+| ORM | Prisma | latest |
+| Base de datos | PostgreSQL | 15+ |
+| Autenticación | JWT + bcrypt + TOTP | — |
+| Validación | Joi | latest |
+| Seguridad | Helmet.js | latest |
+| Rate Limiting | express-rate-limit | latest |
+| MFA | speakeasy + qrcode | latest |
+| Variables de entorno | dotenv | latest |
+| Contenedor BD | Docker | latest |
 
-### 5.2 Input Validation
-- All inputs validated on the backend using Joi schemas
-- Frontend validation is UX-only, never the security boundary
-- Date/time inputs must be within allowed business hours
-- No appointment creation in the past
-- Email format validation on registration
-- Password minimum: 8 characters, at least one uppercase, one number, one special character
+---
 
-### 5.3 Protection Against Common Attacks
-- **SQL Injection:** Use Prisma ORM exclusively, no raw queries unless parameterized
-- **XSS:** Escape all outputs; set Content-Security-Policy header via Helmet
-- **CSRF:** CSRF tokens on all state-mutating form submissions
-- **IDOR:** Verify resource ownership on every request (clients can only access own appointments)
-- **Brute Force:** Rate limit on `/auth/login` — max 5 attempts per 15 minutes per IP
-- **Mass Assignment:** Use explicit field whitelisting in all controllers
+## 5. Requerimientos de Seguridad
 
-### 5.4 HTTP Security Headers (via Helmet.js)
+### 5.1 Autenticación y Autorización
+- Los tokens JWT deben estar firmados con HS256 y un secret de mínimo 32 caracteres
+- Secrets separados para access token y refresh token
+- Expiración del access token: 15 minutos
+- Expiración del refresh token: 7 días
+- Refresh tokens almacenados en cookies HttpOnly con SameSite=Strict y Path=/api/auth
+- Todo endpoint protegido debe validar JWT y verificar rol mediante middleware
+- El rol debe verificarse en el servidor en cada solicitud, nunca confiarse desde el cliente
+
+### 5.2 Validación de Entradas
+- Todas las entradas validadas en el backend con schemas Joi
+- La validación del frontend es solo para experiencia de usuario, nunca es la frontera de seguridad
+- Las fechas de cita deben ser hoy o en el futuro, dentro de los próximos 30 días
+- El formato de horario debe cumplir el patrón HH:MM
+- Validación de formato de correo electrónico en el registro
+- Contraseña mínima: 8 caracteres, al menos una mayúscula, un número y un carácter especial
+- El teléfono debe cumplir el patrón de número válido si se proporciona
+
+### 5.3 Protección contra Ataques Comunes
+- **Inyección SQL:** Uso exclusivo de Prisma ORM con consultas parametrizadas
+- **XSS:** Headers Content-Security-Policy configurados mediante Helmet
+- **CSRF:** Cookie con SameSite=Strict previene solicitudes entre sitios
+- **IDOR:** Verificación de propiedad del recurso en cada solicitud
+- **Fuerza bruta:** Rate limiting en /api/auth/login — máximo 5 intentos por IP cada 15 minutos
+- **Timing attack:** bcrypt siempre se ejecuta aunque el usuario no exista
+- **TOCTOU:** Captura de error P2002 en lugar de verificación previa de duplicados
+- **Asignación masiva:** Lista blanca explícita de campos permitidos en todos los controladores
+
+### 5.4 Headers de Seguridad HTTP (vía Helmet.js)
 ```
 Content-Security-Policy
-X-Frame-Options: DENY
+X-Frame-Options
 X-Content-Type-Options: nosniff
 Strict-Transport-Security (HSTS)
 Referrer-Policy: no-referrer
 Permissions-Policy
 ```
 
-### 5.5 General Security Practices
-- All credentials and secrets in environment variables (.env), never hardcoded
-- .env file must never be committed to version control (.gitignore)
-- HTTPS enforced in production
-- Sensitive error details never exposed to client (generic messages only)
-- Server-side logging of failed authentication attempts
-- CORS configured to allow only the frontend origin
+### 5.5 Prácticas Generales de Seguridad
+- Todas las credenciales y secrets en variables de entorno, nunca en el código fuente
+- El archivo .env nunca debe incluirse en el control de versiones (.gitignore)
+- HTTPS obligatorio en producción
+- Detalles de errores internos nunca expuestos al cliente, solo mensajes genéricos
+- Logging en el servidor de intentos fallidos de autenticación y bloqueos por rate limiting
+- CORS configurado para permitir únicamente el origen del frontend
 
 ---
 
-## 6. Project Structure
+## 6. Estructura del Proyecto
 
 ```
-autolavado-app/
+volcan-detailing/
 ├── backend/
 │   ├── src/
-│   │   ├── config/          # DB connection, env vars, constants
-│   │   ├── middlewares/     # auth, roleGuard, rateLimiter, errorHandler, validate
-│   │   ├── routes/          # auth, appointments, users, services, admin
-│   │   ├── controllers/     # business logic per resource
-│   │   ├── schemas/         # Joi validation schemas
-│   │   ├── models/          # Prisma schema
-│   │   └── utils/           # JWT helpers, response helpers, logger
+│   │   ├── config/       # env.js, constants.js, db.js
+│   │   ├── middlewares/  # auth.js, roleGuard.js, validate.js, errorHandler.js
+│   │   ├── routes/       # auth, appointments, users, services, availability
+│   │   ├── controllers/  # lógica de negocio por recurso
+│   │   ├── schemas/      # schemas Joi por recurso
+│   │   └── utils/        # jwt.js, response.js, logger.js
 │   ├── prisma/
-│   │   └── schema.prisma
+│   │   ├── schema.prisma
+│   │   ├── seed.js
+│   │   └── migrations/
 │   ├── .env.example
 │   └── package.json
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/           # Login, Register, Dashboard (per role), Appointments
-│   │   ├── components/      # Navbar, AppointmentCard, ProtectedRoute
-│   │   ├── context/         # AuthContext
-│   │   ├── services/        # API calls via Axios
-│   │   └── utils/           # form validators, date helpers
+│   │   ├── pages/        # Login, Register, Landing, dashboards por rol, Perfil, Unauthorized
+│   │   ├── components/   # Navbar, AppointmentCard, ProtectedRoute, tabs de admin
+│   │   ├── context/      # AuthContext
+│   │   ├── services/     # authService, appointmentService, userService, serviceService, availabilityService
+│   │   └── utils/        # validators.js, dateHelpers.js
 │   └── package.json
 │
 └── docs/
-    ├── REQUIREMENTS.md       # this file
-    └── SECURITY_DECISIONS.md # rationale for security choices
+    ├── REQUIREMENTS.md
+    └── SECURITY_DECISIONS.md
 ```
 
 ---
 
-## 7. API Endpoints
+## 7. Endpoints del API
 
-### Auth
+### Autenticación
 ```
-POST   /api/auth/register       # Client self-registration
-POST   /api/auth/login          # All roles
-POST   /api/auth/logout         # Invalidate token
-POST   /api/auth/refresh        # Refresh access token
-```
-
-### Appointments
-```
-GET    /api/appointments         # Admin: all | Employee: assigned | Client: own
-POST   /api/appointments         # Client only
-GET    /api/appointments/:id     # Owner or admin/employee
-PATCH  /api/appointments/:id     # Status update (employee/admin) or cancel (client)
-DELETE /api/appointments/:id     # Admin only
+POST   /api/auth/register              # Registro de clientes
+POST   /api/auth/login                 # Todos los roles
+POST   /api/auth/logout                # Cierre de sesión
+POST   /api/auth/refresh               # Renovación de access token
+POST   /api/auth/change-password       # Cambio de contraseña (autenticado)
+POST   /api/auth/mfa/setup             # Iniciar configuración de MFA
+POST   /api/auth/mfa/verify-setup      # Verificar y activar MFA
+POST   /api/auth/mfa/disable           # Desactivar MFA
+POST   /api/auth/mfa/validate          # Validar código TOTP en login
 ```
 
-### Services (Packages)
+### Citas
 ```
-GET    /api/services             # Public
-POST   /api/services             # Admin only
-PUT    /api/services/:id         # Admin only
-DELETE /api/services/:id         # Admin only
-```
-
-### Users (Admin)
-```
-GET    /api/users                # Admin only
-POST   /api/users                # Admin only (create employee)
-PUT    /api/users/:id            # Admin only
-DELETE /api/users/:id            # Admin only
+GET    /api/appointments                # Admin: todas | Empleado: asignadas | Cliente: propias
+POST   /api/appointments                # Solo clientes
+GET    /api/appointments/:id            # Propietario o admin/empleado asignado
+PATCH  /api/appointments/:id            # Cambio de estado (empleado/admin) o cancelación (cliente)
+DELETE /api/appointments/:id            # Solo administrador
 ```
 
-### Availability
+### Servicios
 ```
-GET    /api/availability?date=   # Public
+GET    /api/services                    # Público, sin autenticación
+POST   /api/services                    # Solo administrador
+PUT    /api/services/:id                # Solo administrador
+DELETE /api/services/:id                # Solo administrador (soft delete)
+```
+
+### Usuarios
+```
+GET    /api/users                       # Solo administrador
+POST   /api/users                       # Solo administrador (crear empleado)
+PUT    /api/users/:id                   # Solo administrador
+DELETE /api/users/:id                   # Solo administrador (soft delete)
+```
+
+### Disponibilidad
+```
+GET    /api/availability?date=          # Público, sin autenticación
+```
+
+### Sistema
+```
+GET    /api/health                      # Público, verificación de estado del servidor
 ```
 
 ---
 
-## 8. Data Models
+## 8. Modelos de Datos
 
-### User
+### Usuario
 ```
 id, email, password_hash, name, phone, role (admin|employee|client),
-created_at, updated_at, is_active
+is_active, mfa_secret, mfa_enabled, created_at, updated_at
 ```
 
-### Appointment
+### Cita
 ```
 id, client_id, employee_id (nullable), service_id, vehicle_type,
-date, time_slot, status, notes, created_at, updated_at
+date, time_slot, status, notes, resolved_price, created_at, updated_at
 ```
 
-### Service
+### Servicio
 ```
-id, name, description, duration_minutes, price, is_active
+id, name, description, duration_minutes, prices (JSON), is_active, created_at, updated_at
 ```
 
-### TimeSlot
+### Horario disponible
 ```
 id, day_of_week, start_time, end_time, is_active
 ```
 
 ---
 
-## 9. Non-Functional Requirements
+## 9. Requerimientos No Funcionales
 
-- API response time under 500ms for standard operations
-- Passwords must never appear in logs
-- All API errors return consistent JSON structure: `{ error: true, message: string, code: string }`
-- Authentication errors must not reveal whether email exists (use generic message)
-- Prepared for security scanning with tools like OWASP ZAP and Burp Suite
-```
+- Tiempo de respuesta del API menor a 500ms en operaciones estándar
+- Las contraseñas nunca deben aparecer en logs ni en respuestas del API
+- Todos los errores del API deben seguir la estructura: `{ error: true, message: string, code: string }`
+- Los errores de autenticación no deben revelar si el correo electrónico existe en el sistema
+- El sistema debe estar preparado para auditoría con herramientas como OWASP ZAP y Burp Suite
+- Los cambios de precio en servicios no deben afectar citas ya agendadas

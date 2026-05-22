@@ -1,244 +1,167 @@
-# Security Decisions
+# Decisiones de Seguridad
 
-This document records the rationale behind each security decision in the codebase.
-It is intended for developers maintaining this project and for security reviewers.
-Every claim below points to the specific code that implements it.
+Este documento registra el razonamiento detrás de cada decisión de seguridad tomada en el proyecto. Está dirigido a desarrolladores que mantengan el sistema y a revisores de seguridad. Cada afirmación apunta al código específico que la implementa.
 
 ---
 
-## 1. JWT over server-side sessions
+## 1. JWT en lugar de sesiones en el servidor
 
-**Decision:** Stateless JWT authentication rather than server-stored sessions.
+**Decisión:** Autenticación sin estado mediante JWT en lugar de sesiones almacenadas en el servidor.
 
-**Rationale:** This is a single-backend, single-frontend deployment where horizontal
-scaling is anticipated. Server-side sessions require a shared session store (Redis,
-database) across instances; JWTs carry all identity information inside the token and
-require no cross-node state. The tradeoff — inability to instantly revoke a token — is
-mitigated by keeping the access token lifetime short (15 minutes) and validating the
-user's `isActive` flag on every refresh.
+**Justificación:** Este es un despliegue de un solo backend y un solo frontend donde se anticipa escalabilidad horizontal. Las sesiones en el servidor requieren un almacén de sesiones compartido (Redis, base de datos) entre instancias; los JWT llevan toda la información de identidad dentro del token y no requieren estado entre nodos. La desventaja — la incapacidad de revocar un token instantáneamente — se mitiga manteniendo el tiempo de vida del access token corto (15 minutos) y validando el campo `isActive` del usuario en cada renovación.
 
-**Implementation:**
-- `src/utils/jwt.js` — tokens are signed with HS256 and a 32-character minimum secret.
-- `src/config/env.js` — startup validation rejects secrets shorter than 32 characters.
-- `src/controllers/authController.js` — `refresh` re-queries the database and checks
-  `isActive` before issuing a new access token, so a deactivated account stops
-  receiving new tokens within at most 15 minutes.
+**Implementación:**
+- `src/utils/jwt.js` — los tokens se firman con HS256 y un secret de mínimo 32 caracteres.
+- `src/config/env.js` — la validación al arranque rechaza secrets más cortos que 32 caracteres.
+- `src/controllers/authController.js` — el endpoint `refresh` vuelve a consultar la base de datos y verifica `isActive` antes de emitir un nuevo access token, por lo que una cuenta desactivada deja de recibir tokens nuevos en un máximo de 15 minutos.
 
-**Known limitation:** A stolen, unexpired access token cannot be revoked without
-upgrading to a token blocklist. Acceptable for MVP; the short 15-minute window limits
-the exposure window.
+**Limitación conocida:** Un access token robado y no expirado no puede revocarse sin implementar una lista negra de tokens. Aceptable para el MVP; la ventana corta de 15 minutos limita la exposición.
 
 ---
 
-## 2. Dual-token strategy: access token in memory, refresh token in HttpOnly cookie
+## 2. Estrategia de doble token: access token en memoria, refresh token en cookie HttpOnly
 
-**Decision:** Short-lived access token (15 min) returned in the JSON response body and
-stored in JavaScript memory; long-lived refresh token (7 days) stored in an HttpOnly
-cookie with `SameSite=Strict` and `Path=/api/auth`.
+**Decisión:** Access token de corta duración (15 min) devuelto en el cuerpo de la respuesta JSON y almacenado en memoria de JavaScript; refresh token de larga duración (7 días) almacenado en una cookie HttpOnly con `SameSite=Strict` y `Path=/api/auth`.
 
-**Rationale:**
+**Justificación:**
 
-- **XSS cannot steal the refresh token.** An HttpOnly cookie is invisible to
-  JavaScript. If an attacker injects a script, `document.cookie` does not expose the
-  refresh token.
-- **CSRF cannot use the refresh token.** `SameSite=Strict` prevents the browser from
-  attaching the cookie to cross-site requests entirely. A forged form submission or
-  cross-origin fetch from an attacker's page arrives without the cookie.
-- **`Path=/api/auth` limits cookie scope.** The browser only attaches the refresh
-  cookie to requests under `/api/auth`, not to every API call. This reduces the
-  surface for cookie-logging middleware or proxies to capture it.
-- **Access token in memory (not localStorage).** `localStorage` is accessible to any
-  JavaScript running on the page, including injected scripts. Memory state is cleared
-  on tab close and cannot be read by other tabs or extensions.
-- **Separate secrets per token type.** `JWT_SECRET` signs access tokens;
-  `JWT_REFRESH_SECRET` signs refresh tokens. A stolen access token cannot be used to
-  forge a valid refresh token by changing the payload, and vice versa.
+- **XSS no puede robar el refresh token.** Una cookie HttpOnly es invisible para JavaScript. Si un atacante inyecta un script, `document.cookie` no expone el refresh token.
+- **CSRF no puede usar el refresh token.** `SameSite=Strict` impide que el navegador adjunte la cookie en solicitudes entre sitios. Un formulario falsificado o una solicitud cross-origin desde la página de un atacante llega sin la cookie.
+- **`Path=/api/auth` limita el alcance de la cookie.** El navegador solo adjunta la cookie de refresh en solicitudes bajo `/api/auth`, no en cada llamada al API. Esto reduce la superficie de exposición ante middleware de registro de cookies o proxies.
+- **Access token en memoria (no en localStorage).** `localStorage` es accesible para cualquier JavaScript en la página, incluyendo scripts inyectados. El estado en memoria se limpia al cerrar la pestaña y no puede ser leído por otras pestañas o extensiones.
+- **Secrets separados por tipo de token.** `JWT_SECRET` firma los access tokens; `JWT_REFRESH_SECRET` firma los refresh tokens. Un access token robado no puede usarse para falsificar un refresh token válido cambiando el payload, y viceversa.
 
-**Implementation:**
-- `src/controllers/authController.js` — `cookieOpts` object with all four properties;
-  `clearOpts` uses the same `path` so `clearCookie` actually removes the cookie.
-- `src/utils/jwt.js` — `signAccess`/`verifyAccess` use `JWT_SECRET`;
-  `signRefresh`/`verifyRefresh` use `JWT_REFRESH_SECRET`.
+**Implementación:**
+- `src/controllers/authController.js` — objeto `cookieOpts` con las cuatro propiedades; `clearOpts` usa el mismo `path` para que `clearCookie` elimine efectivamente la cookie.
+- `src/utils/jwt.js` — `signAccess`/`verifyAccess` usan `JWT_SECRET`; `signRefresh`/`verifyRefresh` usan `JWT_REFRESH_SECRET`.
 
 ---
 
-## 3. bcrypt cost factor 12
+## 3. bcrypt con cost factor 12
 
-**Decision:** All passwords hashed with bcrypt at cost factor 12.
+**Decisión:** Todas las contraseñas se hashean con bcrypt en cost factor 12.
 
-**Rationale:** The bcrypt cost factor is the base-2 exponent of the number of rounds.
-Cost 10 (the library default) takes ~100 ms on modern hardware; cost 12 takes ~400 ms.
-OWASP recommends a minimum of 10, with 12 preferred where server throughput allows it.
+**Justificación:** El cost factor de bcrypt es el exponente en base 2 del número de rondas. El cost 10 (predeterminado de la librería) toma ~100 ms en hardware moderno; el cost 12 toma ~400 ms. OWASP recomienda un mínimo de 10, con 12 preferido cuando el rendimiento del servidor lo permite.
 
-For a detailing booking system, login frequency is low (not a high-traffic API), so
-the ~400 ms overhead per login is acceptable. The cost factor directly limits offline
-brute-force speed: an attacker who exfiltrates the hash database can test roughly
-2,500 passwords per second per GPU core at cost 12, versus ~10,000 at cost 10.
+Para un sistema de citas de autolavado, la frecuencia de login es baja (no es un API de alto tráfico), por lo que la sobrecarga de ~400 ms por login es aceptable. El cost factor limita directamente la velocidad de fuerza bruta offline: un atacante que exfiltre la base de datos de hashes puede probar aproximadamente 2,500 contraseñas por segundo por núcleo de GPU con cost 12, versus ~10,000 con cost 10.
 
-A cost factor above 12 is not used because it would make the `/api/auth/login`
-endpoint noticeably slow under modest legitimate load and would not meaningfully
-improve security given that rate limiting already throttles online attacks to 5
-attempts per 15 minutes.
+No se usa un cost factor mayor a 12 porque haría que el endpoint `/api/auth/login` fuera notablemente lento bajo carga legítima moderada y no mejoraría significativamente la seguridad dado que el rate limiting ya limita los ataques en línea a 5 intentos por 15 minutos.
 
-**Implementation:**
-- `src/controllers/authController.js` — `bcrypt.hash(password, 12)` in both `register`
-  and employee `create`.
-- `prisma/seed.js` — seed passwords also hashed with cost 12 for consistency.
+**Implementación:**
+- `src/controllers/authController.js` — `bcrypt.hash(password, 12)` en tanto `register` como en la creación de empleados.
+- `prisma/seed.js` — las contraseñas del seed también se hashean con cost 12 por consistencia.
 
 ---
 
-## 4. Rate limiting on login
+## 4. Rate limiting en el login
 
-**Decision:** Maximum 5 login attempts per IP address per 15-minute sliding window on
-`POST /api/auth/login`. Blocked requests receive `429` with a JSON body matching the
-project's error envelope and are logged.
+**Decisión:** Máximo 5 intentos de login por dirección IP por ventana deslizante de 15 minutos en `POST /api/auth/login`. Las solicitudes bloqueadas reciben código `429` con un cuerpo JSON que sigue el formato de error del proyecto y quedan registradas.
 
-**Rationale:** Without rate limiting, an attacker can test thousands of passwords
-per second against known email addresses (credential stuffing, online brute force).
-5 attempts per 15 minutes is the OWASP-recommended threshold for login endpoints —
-tight enough to stop automated attacks while allowing a legitimate user who misremembers
-their password up to 5 tries before waiting.
+**Justificación:** Sin rate limiting, un atacante puede probar miles de contraseñas por segundo contra direcciones de correo conocidas (credential stuffing, fuerza bruta en línea). 5 intentos por 15 minutos es el umbral recomendado por OWASP para endpoints de login — suficientemente estricto para detener ataques automatizados mientras permite a un usuario legítimo que no recuerda su contraseña hasta 5 intentos antes de esperar.
 
-The 15-minute window was chosen over a longer lockout (e.g. 1 hour) to reduce the
-support burden from accidental lockouts while still making automation impractical.
+La ventana de 15 minutos se eligió sobre un bloqueo más largo (por ejemplo, 1 hora) para reducir la carga de soporte por bloqueos accidentales mientras sigue haciendo la automatización impráctica.
 
-**Why per-IP rather than per-account:** Per-account limits enable a denial-of-service
-attack where an attacker repeatedly locks out a specific user's account by intentionally
-failing login. Per-IP limits do not have this weakness.
+**Por qué por IP y no por cuenta:** Los límites por cuenta habilitan un ataque de denegación de servicio donde un atacante bloquea repetidamente la cuenta de un usuario específico fallando el login intencionalmente. Los límites por IP no tienen esta debilidad.
 
-**Logging:** Every blocked request calls `log.rateLimitHit(req.ip, req.body?.email)`,
-which emits a structured `warn` entry with timestamp. This creates an audit trail for
-detecting coordinated attacks across multiple IPs.
+**Registro:** Cada solicitud bloqueada llama a `log.rateLimitHit(req.ip, req.body?.email)`, que emite una entrada `warn` estructurada con timestamp. Esto crea un rastro de auditoría para detectar ataques coordinados desde múltiples IPs.
 
-**Implementation:**
+**Implementación:**
 - `src/config/constants.js` — `LOGIN_RATE_LIMIT: { windowMs: 15 * 60 * 1000, max: 5 }`.
-- `src/routes/auth.js` — `express-rate-limit` applied only to `POST /login`;
-  `standardHeaders: true` returns `RateLimit-Limit`, `RateLimit-Remaining`, and
-  `RateLimit-Reset` headers so legitimate clients can display a countdown.
-- `src/utils/logger.js` — `rateLimitHit` method.
+- `src/routes/auth.js` — `express-rate-limit` aplicado solo a `POST /login`; `standardHeaders: true` devuelve los headers `RateLimit-Limit`, `RateLimit-Remaining` y `RateLimit-Reset` para que los clientes legítimos puedan mostrar una cuenta regresiva.
+- `src/utils/logger.js` — método `rateLimitHit`.
 
 ---
 
-## 5. IDOR protection on appointments
+## 5. Protección IDOR en citas
 
-**Decision:** Every appointment read and write verifies that the requesting user is
-authorized to access that specific resource, not just that they are authenticated.
+**Decisión:** Cada lectura y escritura de citas verifica que el usuario solicitante esté autorizado para acceder a ese recurso específico, no solo que esté autenticado.
 
-**Rationale:** IDOR (Insecure Direct Object Reference) is OWASP A01. A client who
-knows or guesses another client's appointment ID (`GET /api/appointments/42`) must
-not be able to read or modify it. Role-based middleware alone is insufficient — it
-confirms the user has the right role, but not that the resource belongs to them.
+**Justificación:** IDOR (Insecure Direct Object Reference) es OWASP A01. Un cliente que conoce o adivina el ID de cita de otro cliente (`GET /api/appointments/42`) no debe poder leerla ni modificarla. El middleware de roles por sí solo es insuficiente — confirma que el usuario tiene el rol correcto, pero no que el recurso le pertenece.
 
-**Rules enforced:**
-- A client may only read or cancel their own appointments (`clientId === req.user.sub`).
-- An employee may only read or update status on appointments assigned to them
-  (`employeeId === req.user.sub`).
-- An admin has no ownership restriction.
+**Reglas aplicadas:**
+- Un cliente solo puede leer o cancelar sus propias citas (`clientId === req.user.sub`).
+- Un empleado solo puede leer o actualizar el estado de citas asignadas a él (`employeeId === req.user.sub`).
+- Un administrador no tiene restricción de propiedad.
 
-The check is performed after fetching the record from the database. Returning `403`
-rather than `404` for owned-but-wrong-role access is intentional: a `404` on a
-guessed ID would still confirm that the record exists, leaking the same information.
+La verificación se realiza después de obtener el registro de la base de datos. Devolver `403` en lugar de `404` para acceso a recursos de otro usuario es intencional: un `404` en un ID adivinado confirmaría que el registro existe, filtrando la misma información.
 
-**Implementation:**
-- `src/controllers/appointmentController.js` — IDOR checks in both `get` and `update`
-  before any data is returned or written.
-- Status transition validation (`ALLOWED_TRANSITIONS` map) further constrains what
-  each role can do once the ownership check passes.
+**Implementación:**
+- `src/controllers/appointmentController.js` — verificaciones IDOR en tanto `get` como `update` antes de devolver o escribir cualquier dato.
+- La validación de transiciones de estado (mapa `ALLOWED_TRANSITIONS`) restringe adicionalmente lo que cada rol puede hacer una vez que pasa la verificación de propiedad.
 
 ---
 
-## 6. Helmet configuration and HTTP security headers
+## 6. Configuración de Helmet y headers de seguridad HTTP
 
-**Decision:** All responses carry security headers set by Helmet with one explicit
-override (`referrerPolicy`).
+**Decisión:** Todas las respuestas llevan headers de seguridad configurados por Helmet con una anulación explícita (`referrerPolicy`).
 
-**Headers and their purpose:**
+**Headers y su propósito:**
 
-| Header | Value | Protects against |
-|--------|-------|-----------------|
-| `Content-Security-Policy` | Helmet default | XSS via injected scripts/iframes |
-| `X-Frame-Options` | `SAMEORIGIN` (Helmet default) | Clickjacking |
-| `X-Content-Type-Options` | `nosniff` | MIME-type sniffing attacks |
-| `Strict-Transport-Security` | Helmet default (production) | SSL stripping, downgrade attacks |
-| `Referrer-Policy` | `no-referrer` | Leaking the current URL to third-party requests |
-| `Permissions-Policy` | Helmet default | Unwanted browser feature access (camera, mic, etc.) |
+| Header | Valor | Protege contra |
+|--------|-------|----------------|
+| `Content-Security-Policy` | Predeterminado de Helmet | XSS mediante scripts/iframes inyectados |
+| `X-Frame-Options` | `SAMEORIGIN` (predeterminado de Helmet) | Clickjacking |
+| `X-Content-Type-Options` | `nosniff` | Ataques de sniffing de tipo MIME |
+| `Strict-Transport-Security` | Predeterminado de Helmet (producción) | SSL stripping, ataques de degradación |
+| `Referrer-Policy` | `no-referrer` | Filtración del URL actual a solicitudes de terceros |
+| `Permissions-Policy` | Predeterminado de Helmet | Acceso no deseado a funciones del navegador (cámara, micrófono, etc.) |
 
-`referrerPolicy: { policy: 'no-referrer' }` is passed explicitly because the Helmet
-default (`strict-origin-when-cross-origin`) would include the path in the `Referer`
-header on same-origin navigations, which could expose internal routes in server logs.
+`referrerPolicy: { policy: 'no-referrer' }` se pasa explícitamente porque el predeterminado de Helmet (`strict-origin-when-cross-origin`) incluiría la ruta en el header `Referer` en navegaciones del mismo origen, lo que podría exponer rutas internas en logs del servidor.
 
-**CORS** is configured to allow only `FRONTEND_URL` (set in `.env`). The wildcard
-`*` origin is never used. `credentials: true` is required because the refresh-token
-cookie must be sent cross-origin (browser blocks credentialed requests to `*`).
+**CORS** está configurado para permitir únicamente `FRONTEND_URL` (definido en `.env`). El origen comodín `*` nunca se usa. `credentials: true` es necesario porque la cookie del refresh token debe enviarse entre orígenes (el navegador bloquea solicitudes con credenciales a `*`).
 
-**Body size limit** (`express.json({ limit: '10kb' })`) prevents oversized JSON
-payloads from being used as a denial-of-service vector.
+**Límite de tamaño del body** (`express.json({ limit: '10kb' })`) previene que payloads JSON sobredimensionados sean usados como vector de denegación de servicio.
 
-**Implementation:**
-- `src/app.js` — `app.use(helmet({ referrerPolicy: { policy: 'no-referrer' } }))` and
-  `app.use(cors({ origin: env.FRONTEND_URL, credentials: true }))`.
+**Implementación:**
+- `src/app.js` — `app.use(helmet({ referrerPolicy: { policy: 'no-referrer' } }))` y `app.use(cors({ origin: env.FRONTEND_URL, credentials: true }))`.
 
 ---
 
-## 7. Timing attack prevention on login
+## 7. Prevención de timing attack en el login
 
-**Decision:** bcrypt comparison runs even when the submitted email does not match any
-user in the database.
+**Decisión:** La comparación con bcrypt se ejecuta incluso cuando el correo electrónico enviado no coincide con ningún usuario en la base de datos.
 
-**Rationale:** A naive login implementation short-circuits when the user is not found:
+**Justificación:** Una implementación de login ingenua hace un cortocircuito cuando no se encuentra el usuario:
 
 ```js
-// Vulnerable pattern
+// Patrón vulnerable
 const user = await prisma.user.findUnique({ where: { email } });
-if (!user) return fail(res, 'Invalid credentials', ...); // fast path
-await bcrypt.compare(password, user.passwordHash);       // slow path
+if (!user) return fail(res, 'Credenciales inválidas', ...); // ruta rápida
+await bcrypt.compare(password, user.passwordHash);          // ruta lenta
 ```
 
-This creates a measurable timing difference between "email does not exist" (~1 ms) and
-"email exists but password is wrong" (~400 ms at cost 12). An attacker can use this
-difference to enumerate valid email addresses at scale, building a target list for
-credential stuffing.
+Esto crea una diferencia de tiempo medible entre "el correo no existe" (~1 ms) y "el correo existe pero la contraseña es incorrecta" (~400 ms con cost 12). Un atacante puede usar esta diferencia para enumerar direcciones de correo válidas a escala, construyendo una lista de objetivos para credential stuffing.
 
-The fix is to always run a bcrypt comparison, using a dummy hash when no user is
-found so the response time is approximately the same in both cases.
+La solución es siempre ejecutar una comparación bcrypt, usando un hash ficticio cuando no se encuentra el usuario para que el tiempo de respuesta sea aproximadamente el mismo en ambos casos.
 
-**Implementation:**
+**Implementación:**
 - `src/controllers/authController.js`:
   ```js
   const hash = user?.passwordHash ?? '$2b$12$invalidhashpaddingtomatchbcrypttime';
   const valid = await bcrypt.compare(password, hash);
   ```
-  The dummy value is a valid bcrypt hash format so the library does not short-circuit.
-  The conditional `if (!user || !user.isActive || !valid)` is evaluated after the
-  comparison, ensuring the slow path always runs.
+  El valor ficticio tiene formato válido de hash bcrypt para que la librería no haga cortocircuito. El condicional `if (!user || !user.isActive || !valid)` se evalúa después de la comparación, asegurando que la ruta lenta siempre se ejecute.
 
-**Why the same generic error message:** The final `fail(...)` call returns
-`"Invalid credentials"` regardless of whether the email exists, the password is wrong,
-or the account is inactive. This prevents a different class of enumeration: an
-attacker cannot confirm a valid email by observing a different error message.
+**Por qué el mismo mensaje de error genérico:** La llamada final a `fail(...)` devuelve `"Credenciales inválidas"` independientemente de si el correo existe, la contraseña es incorrecta o la cuenta está inactiva. Esto previene otra clase de enumeración: un atacante no puede confirmar un correo válido observando un mensaje de error diferente.
 
 ---
 
-## 8. TOCTOU fix on appointment booking
+## 8. Fix TOCTOU en el agendamiento de citas
 
-**Decision:** Double-booking prevention uses a two-layer approach: an
-application-level conflict check followed by a database-level partial unique index as
-the authoritative safety net.
+**Decisión:** La prevención de doble reserva usa un enfoque de dos capas: una verificación de conflicto a nivel de aplicación seguida de un índice único parcial a nivel de base de datos como red de seguridad definitiva.
 
-**The problem — check-then-act race condition (TOCTOU):**
+**El problema — condición de carrera check-then-act (TOCTOU):**
 
 ```
-Request A: SELECT ... WHERE date='2024-01-15' AND time_slot='09:00' → 0 rows (slot free)
-Request B: SELECT ... WHERE date='2024-01-15' AND time_slot='09:00' → 0 rows (slot free)
-Request A: INSERT appointment (date='2024-01-15', time_slot='09:00') ← succeeds
-Request B: INSERT appointment (date='2024-01-15', time_slot='09:00') ← also succeeds ← DOUBLE BOOKING
+Request A: SELECT ... WHERE date='2024-01-15' AND time_slot='09:00' → 0 filas (slot libre)
+Request B: SELECT ... WHERE date='2024-01-15' AND time_slot='09:00' → 0 filas (slot libre)
+Request A: INSERT cita (date='2024-01-15', time_slot='09:00') ← éxito
+Request B: INSERT cita (date='2024-01-15', time_slot='09:00') ← también éxito ← DOBLE RESERVA
 ```
 
-If the application only relies on a SELECT before INSERT, two concurrent requests that
-both pass the check before either writes will both succeed, creating two appointments
-for the same slot.
+Si la aplicación solo depende de un SELECT antes del INSERT, dos solicitudes concurrentes que ambas pasen la verificación antes de que cualquiera escriba tendrán éxito, creando dos citas para el mismo horario.
 
-**The fix — partial unique index:**
+**La solución — índice único parcial:**
 
 ```sql
 CREATE UNIQUE INDEX "uq_active_appointment_slot"
@@ -246,103 +169,53 @@ CREATE UNIQUE INDEX "uq_active_appointment_slot"
   WHERE status != 'cancelled';
 ```
 
-The partial index enforces uniqueness at the database level: the INSERT itself will
-fail with a unique constraint violation if a concurrent request already committed.
-The `WHERE status != 'cancelled'` condition means cancelled appointments do not
-block a slot from being rebooked, which is the intended business behaviour. A plain
-`@@unique([date, timeSlot])` without the condition would not allow rebooking after
-cancellation.
+El índice parcial aplica unicidad a nivel de base de datos: el propio INSERT fallará con una violación de restricción única si una solicitud concurrente ya confirmó. La condición `WHERE status != 'cancelled'` significa que las citas canceladas no bloquean un slot para ser reservado nuevamente, que es el comportamiento esperado del negocio.
 
-**Why keep the application-level check at all:** The application check (`findFirst`)
-catches the common case and returns a user-friendly `409 SLOT_TAKEN` response. The
-database index catches the race condition and its `P2002` Prisma error is translated
-to the same `409` response, so the client sees a consistent error code either way.
+**Por qué mantener la verificación a nivel de aplicación:** La verificación en la aplicación (`findFirst`) captura el caso común y devuelve una respuesta `409 SLOT_TAKEN` amigable para el usuario. El índice de la base de datos captura la condición de carrera y su error Prisma `P2002` se traduce al mismo `409`, por lo que el cliente ve un código de error consistente en ambos casos.
 
-**Why the index is in the migration rather than the schema:**
-Prisma's `schema.prisma` does not support partial indexes (`WHERE` clauses on
-`@@unique`). The index is appended as raw SQL at the end of the initial migration
-(`prisma/migrations/20260509202620_init/migration.sql`), after all tables and foreign
-keys exist, so it runs in the correct order.
+**Por qué el índice está en la migración y no en el schema:** `schema.prisma` de Prisma no soporta índices parciales (cláusulas `WHERE` en `@@unique`). El índice se agrega como SQL raw al final de la migración inicial, después de que todas las tablas y llaves foráneas existen, para que se ejecute en el orden correcto.
 
-**Implementation:**
-- `prisma/migrations/20260509202620_init/migration.sql` — partial unique index
-  definition.
-- `src/controllers/appointmentController.js` — `findFirst` conflict check before
-  `create`; `P2002` caught in the `catch` block and returned as `SLOT_TAKEN`.
+**Implementación:**
+- `prisma/migrations/20260509202620_init/migration.sql` — definición del índice único parcial.
+- `src/controllers/appointmentController.js` — verificación `findFirst` antes de `create`; `P2002` capturado en el bloque `catch` y devuelto como `SLOT_TAKEN`.
 
 ---
 
-## 9. Change password requires current password confirmation
+## 9. El cambio de contraseña requiere confirmación de la contraseña actual
 
-**Decision:** `POST /api/auth/change-password` requires the caller to supply
-`currentPassword` and verifies it with bcrypt before applying the update.
+**Decisión:** `POST /api/auth/change-password` requiere que el solicitante proporcione `currentPassword` y lo verifica con bcrypt antes de aplicar la actualización.
 
-**Rationale:** A successful login produces a JWT access token that is valid for
-15 minutes and a refresh token that is valid for 7 days. If an attacker obtains
-a session — by stealing the device, intercepting a token, or exploiting XSS —
-they would otherwise be able to silently change the victim's password and lock
-them out permanently. Requiring the current password means the attacker must
-know a secret that was never transmitted after initial login, which they are
-unlikely to have from a stolen token alone.
+**Justificación:** Un login exitoso produce un access token válido por 15 minutos y un refresh token válido por 7 días. Si un atacante obtiene una sesión — robando el dispositivo, interceptando un token o explotando XSS — de otro modo podría cambiar silenciosamente la contraseña de la víctima y bloquearla permanentemente. Requerir la contraseña actual significa que el atacante debe conocer un secreto que nunca fue transmitido después del login inicial, lo que es poco probable que tenga solo con un token robado.
 
-**Why the error message is generic:** Whether the supplied `currentPassword` is
-wrong, the account does not exist, or the account is inactive, the endpoint
-returns the same `INVALID_CREDENTIALS` code and `"Invalid credentials"` message.
-Returning a distinct error such as `"Current password is incorrect"` would confirm
-to an attacker that they are targeting a valid account and that the session they
-hold is still active — information they should not be able to confirm.
+**Por qué el mensaje de error es genérico:** Ya sea que la `currentPassword` enviada sea incorrecta, la cuenta no exista o esté inactiva, el endpoint devuelve el mismo código `INVALID_CREDENTIALS` y el mensaje `"Credenciales inválidas"`. Devolver un error distinto como `"La contraseña actual es incorrecta"` confirmaría al atacante que está apuntando a una cuenta válida y que la sesión que tiene sigue activa.
 
-The bcrypt comparison always runs against the stored hash (or a dummy hash if
-the user is somehow not found) to prevent the timing-attack variant described in
-section 7.
+La comparación con bcrypt siempre se ejecuta contra el hash almacenado (o un hash ficticio si el usuario no se encuentra) para prevenir la variante de timing attack descrita en la sección 7.
 
-**Known limitation — existing tokens are not invalidated:** Changing the password
-does not revoke any issued tokens. An attacker who had already captured an access
-token retains access until it expires (up to 15 minutes). An attacker with the
-refresh token can continue obtaining new access tokens until the 7-day refresh
-token expires, regardless of the password change.
+**Limitación conocida — los tokens existentes no se invalidan:** Cambiar la contraseña no revoca ningún token emitido. Un atacante que ya capturó un access token retiene acceso hasta que expire (hasta 15 minutos). Un atacante con el refresh token puede continuar obteniendo nuevos access tokens hasta que el refresh token expire en 7 días, independientemente del cambio de contraseña.
 
-Fully closing this gap requires one of:
-1. **Refresh token rotation with a blocklist** — each refresh issues a new token
-   and invalidates the previous one. A password change marks all tokens for that
-   user as invalid in the blocklist.
-2. **Embedding a `passwordVersion` counter** in the JWT payload and incrementing
-   it on every password change. The `refresh` controller compares the token's
-   version with the current value in the database and rejects mismatches.
+Cerrar completamente esta brecha requiere una de estas mejoras:
+1. **Rotación de refresh tokens con lista negra** — cada uso del refresh token emite uno nuevo e invalida el anterior. Un cambio de contraseña marca todos los tokens del usuario como inválidos.
+2. **Incorporar un contador `passwordVersion`** en el payload del JWT e incrementarlo en cada cambio de contraseña. El controlador `refresh` compara la versión del token con el valor actual en la base de datos y rechaza las discrepancias.
 
-Both require additional state in the database and are left as a post-MVP
-improvement.
+Ambas requieren estado adicional en la base de datos y se dejan como mejora post-MVP.
 
-**Implementation:**
-- `src/controllers/authController.js` — `changePassword`: fetches `passwordHash`,
-  runs `bcrypt.compare` unconditionally, returns `INVALID_CREDENTIALS` on failure
-  (same code as login), hashes the new password at cost 12, updates the record.
-- `src/schemas/authSchema.js` — `changePassword` schema: `newPassword` reuses the
-  same `password` rule as registration (min 8 chars, uppercase, digit, special char).
+**Implementación:**
+- `src/controllers/authController.js` — `changePassword`: obtiene `passwordHash`, ejecuta `bcrypt.compare` incondicionalmente, devuelve `INVALID_CREDENTIALS` en caso de fallo, hashea la nueva contraseña con cost 12 y actualiza el registro.
+- `src/schemas/authSchema.js` — schema `changePassword`: `newPassword` reutiliza la misma regla de contraseña del registro (mín. 8 caracteres, mayúscula, dígito, carácter especial).
 
 ---
 
-## 10. Multi-Factor Authentication (TOTP)
+## 10. Autenticación multifactor (TOTP)
 
-**Decision:** TOTP-based MFA using the speakeasy library, compatible with Google
-Authenticator and any RFC 6238–compliant app. MFA is opt-in per user and gated
-behind a verified setup step.
+**Decisión:** MFA basado en TOTP usando la librería speakeasy, compatible con Google Authenticator y cualquier app compatible con RFC 6238. El MFA es opcional por usuario y requiere un paso de verificación antes de activarse.
 
-### What TOTP is and why it helps
+### Qué es TOTP y por qué ayuda
 
-TOTP (Time-based One-Time Password, RFC 6238) generates a 6-digit code by hashing
-a shared secret together with the current Unix time divided into 30-second windows.
-The server and the authenticator app each compute the code independently — no
-network communication is needed at verification time. Because the code changes
-every 30 seconds and is single-use in practice, a stolen password alone is not
-enough to authenticate: the attacker also needs physical access to the device
-running the authenticator.
+TOTP (Time-based One-Time Password, RFC 6238) genera un código de 6 dígitos hasheando un secreto compartido junto con el tiempo Unix actual dividido en ventanas de 30 segundos. El servidor y la app autenticadora calculan el código de forma independiente — no se necesita comunicación de red en el momento de verificación. Dado que el código cambia cada 30 segundos y es de un solo uso en la práctica, una contraseña robada sola no es suficiente para autenticarse: el atacante también necesita acceso físico al dispositivo que ejecuta el autenticador.
 
-### Two-step login flow and the tempToken
+### Flujo de login en dos pasos y el tempToken
 
-When a user with MFA enabled submits their password, the backend cannot issue a
-full session immediately — the second factor has not been verified yet. Instead,
-it returns a **tempToken**:
+Cuando un usuario con MFA activado envía su contraseña, el backend no puede emitir una sesión completa de inmediato — el segundo factor aún no ha sido verificado. En su lugar, devuelve un **tempToken**:
 
 ```js
 if (user.mfaEnabled) {
@@ -351,132 +224,53 @@ if (user.mfaEnabled) {
 }
 ```
 
-The tempToken is a JWT signed with `JWT_SECRET` and expires in **5 minutes**.
-Critically, it carries `mfaRequired: true` in its payload. The `POST /api/auth/mfa/validate`
-endpoint checks for this claim before issuing real tokens:
+El tempToken es un JWT firmado con `JWT_SECRET` que expira en **5 minutos**. Lleva `mfaRequired: true` en su payload. El endpoint `POST /api/auth/mfa/validate` verifica esta claim antes de emitir tokens reales:
 
 ```js
-if (!payload.mfaRequired) return fail(res, 'Invalid token', 'INVALID_TOKEN', 401);
+if (!payload.mfaRequired) return fail(res, 'Token inválido', 'INVALID_TOKEN', 401);
 ```
 
-This means the tempToken **cannot be used as an access token** even if intercepted:
-the auth middleware (`src/middlewares/auth.js`) accepts any valid JWT signed with
-`JWT_SECRET`, but a tempToken only grants access to the `/mfa/validate` endpoint.
-Every other protected route ignores the `mfaRequired` claim entirely and relies on
-the normal `sub`/`role` payload, so a tempToken presented as a Bearer token would
-pass signature verification but carry no special privileges beyond what a normal
-access token would — and normal access tokens do not have `mfaRequired: true`, so
-this claim is effectively inert outside the validate endpoint.
+Esto significa que el tempToken **no puede usarse como access token** aunque sea interceptado. La expiración de 5 minutos limita la ventana durante la cual un tempToken robado puede usarse para completar el login.
 
-The 5-minute expiry limits the window during which a stolen tempToken can be used
-to complete the login.
+### La configuración requiere verificación antes de activar el MFA
 
-### Setup requires verification before MFA is enabled
+`POST /api/auth/mfa/setup` genera un secreto TOTP y lo guarda en el registro del usuario, pero **no** establece `mfaEnabled = true`. El usuario debe llamar a `POST /api/auth/mfa/verify-setup` con un código válido de su app autenticadora para activarlo. Este proceso de dos pasos previene que un usuario active el MFA con un autenticador mal configurado y quede bloqueado de su cuenta.
 
-`POST /api/auth/mfa/setup` generates a TOTP secret and saves it to the user record,
-but does **not** set `mfaEnabled = true`. The user must call
-`POST /api/auth/mfa/verify-setup` with a valid code from their authenticator app:
+### Desactivar el MFA requiere confirmación de contraseña
 
-```js
-await prisma.user.update({ where: { id: req.user.sub }, data: { mfaEnabled: true } });
-```
+`POST /api/auth/mfa/disable` requiere que el usuario proporcione su contraseña actual, verificada con bcrypt antes de limpiar el flag. Sin esta verificación, un atacante que obtenga una sesión robada podría desactivar inmediatamente el MFA y luego cambiar la contraseña, bloqueando permanentemente al propietario legítimo.
 
-This two-step process prevents a user from enabling MFA with a misconfigured
-authenticator — for example, an app that scanned a blurry QR code and stored the
-secret incorrectly. If MFA were enabled without verification, the user would be
-locked out of their account at next login with no way to recover without admin
-intervention.
+### Tolerancia al desfase de reloj (window: 1)
 
-### Disabling MFA requires password confirmation
+Los códigos TOTP están ligados a ventanas de 30 segundos. Si el reloj del servidor y el del dispositivo difieren ligeramente, un código generado en el borde de una ventana podría ser rechazado aunque sea técnicamente válido. `window: 1` de speakeasy acepta la ventana actual más una ventana en cada lado (±30 segundos), dando un rango de aceptación total de 90 segundos. Esta es la configuración predeterminada recomendada por OWASP.
 
-`POST /api/auth/mfa/disable` requires the user to supply their current password,
-verified with bcrypt before the flag is cleared:
+### Limitación conocida — rotación de refresh tokens
 
-```js
-const valid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
-if (!user || !valid) return fail(res, 'Invalid credentials', 'INVALID_CREDENTIALS', 401);
-await prisma.user.update({ where: { id: user.id }, data: { mfaEnabled: false, mfaSecret: null } });
-```
+El MFA refuerza el login inicial pero no protege contra un refresh token robado que fue emitido antes de activar el MFA, o un access token capturado en mitad de la sesión. La rotación de refresh tokens es la mejora natural que se deja para post-MVP.
 
-Without this check, an attacker who obtains a stolen session (access token) could
-immediately disable MFA and then change the password, fully locking out the
-legitimate owner. Requiring the password means the session alone is insufficient
-— the attacker must also know the password, which is precisely what MFA is meant
-to protect against.
-
-### Clock drift tolerance (window: 1)
-
-TOTP codes are time-bound to 30-second windows. If the server clock and the
-device clock differ slightly — a common occurrence on mobile devices without NTP —
-a code generated at the edge of a window may be rejected even though it is
-technically valid. speakeasy's `window: 1` accepts the current window plus one
-window on each side (±30 seconds), giving a total acceptance range of 90 seconds:
-
-```js
-speakeasy.totp.verify({ secret, encoding: 'base32', token, window: 1 });
-```
-
-A wider window (e.g. `window: 2`, ±60 seconds) would improve tolerance for
-misconfigured clocks but would also extend the time during which a captured code
-could be replayed. `window: 1` is the OWASP-recommended default.
-
-### Known limitation — refresh token rotation
-
-MFA hardens the initial login but does not protect against a stolen refresh token
-that was issued before MFA was enabled, or an access token captured mid-session.
-The same token-invalidation limitation described in section 9 applies here.
-
-Refresh token rotation is the natural pairing for MFA: each use of a refresh token
-issues a new one and invalidates the previous, so a stolen token becomes useless
-after one successful rotation. Combined with MFA, this would mean an attacker needs
-the password, the physical authenticator device, and a live refresh token — all
-simultaneously — to maintain a session. This is left as a post-MVP improvement.
-
-**Implementation:**
-- `prisma/schema.prisma` — `mfaSecret String? @map("mfa_secret")` and
-  `mfaEnabled Boolean @default(false) @map("mfa_enabled")` on the `User` model.
-- `prisma/migrations/20260510170104_add_mfa_fields/` — adds both columns with safe
-  defaults (`NULL` secret, `false` enabled) so existing users are unaffected.
-- `src/utils/jwt.js` — `signTemp`/`verifyTemp` use `JWT_SECRET` with a 5-minute
-  expiry; the shared secret is intentional (no new env var needed) because the
-  `mfaRequired` claim makes the token structurally distinct from an access token.
-- `src/controllers/authController.js` — `mfaSetup`, `mfaVerifySetup`, `mfaDisable`,
-  `mfaValidate`; updated `login` and `refresh` now include `mfaEnabled` in the
-  returned user object.
-- `src/schemas/authSchema.js` — `mfaVerifySetup` and `mfaValidate` require `token`
-  to match `/^\d{6}$/`; `mfaDisable` requires a non-empty `password` string.
+**Implementación:**
+- `prisma/schema.prisma` — `mfaSecret String? @map("mfa_secret")` y `mfaEnabled Boolean @default(false) @map("mfa_enabled")` en el modelo `User`.
+- `prisma/migrations/20260510170104_add_mfa_fields/` — agrega ambas columnas con defaults seguros para que los usuarios existentes no se vean afectados.
+- `src/utils/jwt.js` — `signTemp`/`verifyTemp` usan `JWT_SECRET` con expiración de 5 minutos.
+- `src/controllers/authController.js` — `mfaSetup`, `mfaVerifySetup`, `mfaDisable`, `mfaValidate`.
+- `src/schemas/authSchema.js` — `mfaVerifySetup` y `mfaValidate` requieren que `token` coincida con `/^\d{6}$/`.
 
 ---
 
-## 11. Appointment price is resolved and stored at booking time
+## 11. El precio de la cita se resuelve y almacena al momento de la reserva
 
-**Decision:** When a client creates an appointment, the controller looks up the
-service's `prices` JSON (`{ sedan, suv, van }`) and writes the applicable tier
-into a `resolvedPrice` column on the `Appointment` row. The stored price is never
-recalculated from the live service record.
+**Decisión:** Cuando un cliente crea una cita, el controlador busca el JSON de `prices` del servicio (`{ sedan, suv, van }`) y escribe el nivel aplicable en una columna `resolvedPrice` en el registro de la cita. El precio almacenado nunca se recalcula desde el registro vivo del servicio.
 
-**Rationale:** Service prices can change at any time via the admin panel. Without
-snapshotting the price at booking time, a price increase would silently retroact
-to all pending and confirmed appointments that were booked at the original rate.
-This would be both surprising to clients and potentially a liability issue.
+**Justificación:** Los precios de los servicios pueden cambiar en cualquier momento desde el panel de administrador. Sin capturar el precio al momento de la reserva, un aumento de precio retroactaría silenciosamente a todas las citas pendientes y confirmadas que fueron reservadas a la tarifa original, lo cual sería sorpresivo para los clientes y potencialmente un problema de responsabilidad.
 
-Storing `resolvedPrice` at creation means:
-- What the client sees in the confirmation is what they owe, regardless of
-  subsequent price changes.
-- Historical reporting (revenue, average ticket) reflects what was actually charged,
-  not the current catalogue price.
-- Auditors can reconstruct the price tier that was in effect at the time of each
-  booking without needing to inspect the audit log.
+Almacenar `resolvedPrice` al momento de la creación significa:
+- Lo que el cliente ve en la confirmación es lo que debe pagar, independientemente de cambios posteriores en los precios.
+- Los reportes históricos reflejan lo que realmente se cobró, no el precio actual del catálogo.
+- Los auditores pueden reconstruir el nivel de precio vigente al momento de cada reserva sin necesidad de inspeccionar el log de auditoría.
 
-`resolvedPrice` is nullable so that the migration does not require a data-backfill
-for pre-existing appointments that were created before this feature was introduced.
+`resolvedPrice` es nullable para que la migración no requiera retroalimentar datos para citas pre-existentes creadas antes de que se introdujera esta funcionalidad.
 
-**Implementation:**
-- `prisma/schema.prisma` — `resolvedPrice Decimal? @db.Decimal(10,2) @map("resolved_price")`
-  on `Appointment`; `prices Json` replaces the old `price Decimal` on `Service`.
-- `prisma/migrations/20260510180000_replace_price_with_prices_json/migration.sql` —
-  drops `price`, adds `prices JSONB` with a temporary `DEFAULT` for existing rows
-  (removed immediately after), adds `resolved_price` as nullable.
-- `src/controllers/appointmentController.js` — `VEHICLE_PRICE_KEY` map converts the
-  booking form's vehicle type string to the `sedan | suv | van` tier key; the resolved
-  value is written into the `create` payload.
+**Implementación:**
+- `prisma/schema.prisma` — `resolvedPrice Decimal? @db.Decimal(10,2) @map("resolved_price")` en `Appointment`; `prices Json` reemplaza al antiguo `price Decimal` en `Service`.
+- `prisma/migrations/20260510180000_replace_price_with_prices_json/migration.sql` — elimina `price`, agrega `prices JSONB` con un `DEFAULT` temporal para filas existentes, agrega `resolved_price` como nullable.
+- `src/controllers/appointmentController.js` — el mapa `VEHICLE_PRICE_KEY` convierte el tipo de vehículo del formulario de reserva a la clave de nivel `sedan | suv | van`; el valor resuelto se escribe en el payload de `create`.
