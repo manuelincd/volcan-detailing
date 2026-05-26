@@ -18,13 +18,32 @@ const STATUS_LABELS = {
   cancelled:   'Cancelada',
 };
 
+const TERMINAL = new Set(['completed', 'cancelled']);
+
+function formatGroupHeader(dateStr) {
+  const label = new Date(dateStr + 'T00:00:00Z').toLocaleDateString('es-MX', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC',
+  });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function groupByDate(appointments) {
+  const groups = {};
+  for (const a of appointments) {
+    const key = toDateString(a.date);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(a);
+  }
+  return groups;
+}
+
 // ─── Employee appointment card ────────────────────────────────────────────────
 
-function EmployeeAppointmentCard({ appointment: a, onStatusChange, updating }) {
-  const nextOptions = NEXT_STATUSES[a.status] ?? [];
+function EmployeeAppointmentCard({ appointment: a, onStatusChange, updating, past }) {
+  const nextOptions = past ? [] : (NEXT_STATUSES[a.status] ?? []);
 
   return (
-    <div className="card">
+    <div className={`card${past ? ' appointment-card--past' : ''}`}>
       <div className="appointment-card-header">
         <div>
           <p className="appointment-datetime">{a.timeSlot}</p>
@@ -41,28 +60,30 @@ function EmployeeAppointmentCard({ appointment: a, onStatusChange, updating }) {
 
       {a.notes && <p className="appointment-notes">{a.notes}</p>}
 
-      {nextOptions.length > 0 ? (
-        <div className="status-select-row">
-          <label htmlFor={`status-${a.id}`}>Actualizar estado</label>
-          <select
-            id={`status-${a.id}`}
-            defaultValue=""
-            disabled={updating}
-            onChange={(e) => {
-              if (e.target.value) onStatusChange(a.id, e.target.value);
-            }}
-          >
-            <option value="" disabled>
-              {updating ? 'Actualizando…' : 'Cambiar a…'}
-            </option>
-            {nextOptions.map((s) => (
-              <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-            ))}
-          </select>
-          {updating && <span className="spinner" />}
-        </div>
-      ) : (
-        <p className="no-actions-note">Sin acciones disponibles.</p>
+      {!past && (
+        nextOptions.length > 0 ? (
+          <div className="status-select-row">
+            <label htmlFor={`status-${a.id}`}>Actualizar estado</label>
+            <select
+              id={`status-${a.id}`}
+              defaultValue=""
+              disabled={updating}
+              onChange={(e) => {
+                if (e.target.value) onStatusChange(a.id, e.target.value);
+              }}
+            >
+              <option value="" disabled>
+                {updating ? 'Actualizando…' : 'Cambiar a…'}
+              </option>
+              {nextOptions.map((s) => (
+                <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+              ))}
+            </select>
+            {updating && <span className="spinner" />}
+          </div>
+        ) : (
+          <p className="no-actions-note">Sin acciones disponibles.</p>
+        )
       )}
     </div>
   );
@@ -76,6 +97,7 @@ export default function EmployeeDashboard() {
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState('');
   const [updating,     setUpdating]     = useState(null);
+  const [showPast,     setShowPast]     = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -102,15 +124,34 @@ export default function EmployeeDashboard() {
   };
 
   const today = localToday();
-  const todayAppointments = appointments
-    .filter((a) => toDateString(a.date) === today)
-    .sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
 
-  const dateLabel = new Date().toLocaleDateString('es-MX', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  });
+  const upcoming = appointments
+    .filter((a) => {
+      const d = toDateString(a.date);
+      return d === today || (d > today && !TERMINAL.has(a.status));
+    })
+    .sort((a, b) => {
+      const ka = toDateString(a.date) + a.timeSlot;
+      const kb = toDateString(b.date) + b.timeSlot;
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
 
-  const count = todayAppointments.length;
+  const past = appointments
+    .filter((a) => {
+      const d = toDateString(a.date);
+      return d < today || (d > today && TERMINAL.has(a.status));
+    })
+    .sort((a, b) => {
+      const ka = toDateString(a.date) + a.timeSlot;
+      const kb = toDateString(b.date) + b.timeSlot;
+      return ka > kb ? -1 : ka < kb ? 1 : 0;
+    });
+
+  const upcomingGroups  = groupByDate(upcoming);
+  const upcomingDateKeys = Object.keys(upcomingGroups).sort();
+
+  const pastGroups    = groupByDate(past);
+  const pastDateKeys  = Object.keys(pastGroups).sort().reverse();
 
   return (
     <div className="page">
@@ -118,11 +159,10 @@ export default function EmployeeDashboard() {
       <main className="container">
         <div className="dashboard-header">
           <div>
-            <h1 className="dashboard-title">Trabajos de hoy</h1>
-            <p className="dashboard-subtitle">{dateLabel}</p>
+            <h1 className="dashboard-title">Mis citas próximas</h1>
           </div>
           <span className="badge badge-employee">
-            {count} {count === 1 ? 'cita' : 'citas'}
+            {upcoming.length} {upcoming.length === 1 ? 'cita' : 'citas'}
           </span>
         </div>
 
@@ -132,18 +172,61 @@ export default function EmployeeDashboard() {
           <div className="loading-state">
             <span className="spinner" /><span>Cargando…</span>
           </div>
-        ) : todayAppointments.length === 0 ? (
-          <div className="empty-state">No hay citas programadas para hoy.</div>
+        ) : upcoming.length === 0 ? (
+          <div className="empty-state">No tienes citas próximas asignadas.</div>
         ) : (
           <div className="appointments-list">
-            {todayAppointments.map((a) => (
-              <EmployeeAppointmentCard
-                key={a.id}
-                appointment={a}
-                onStatusChange={handleStatusChange}
-                updating={updating === a.id}
-              />
+            {upcomingDateKeys.map((dateKey) => (
+              <div key={dateKey} className="date-group">
+                <h3 className="date-group-heading">{formatGroupHeader(dateKey)}</h3>
+                {upcomingGroups[dateKey].map((a) => (
+                  <EmployeeAppointmentCard
+                    key={a.id}
+                    appointment={a}
+                    onStatusChange={handleStatusChange}
+                    updating={updating === a.id}
+                  />
+                ))}
+              </div>
             ))}
+          </div>
+        )}
+
+        {!loading && past.length > 0 && (
+          <div className="past-section">
+            {!showPast ? (
+              <button
+                className="btn btn-sm btn-reactivate"
+                onClick={() => setShowPast(true)}
+              >
+                Ver citas anteriores ({past.length})
+              </button>
+            ) : (
+              <>
+                <div className="appointments-list">
+                  {pastDateKeys.map((dateKey) => (
+                    <div key={dateKey} className="date-group">
+                      <h3 className="date-group-heading">{formatGroupHeader(dateKey)}</h3>
+                      {pastGroups[dateKey].map((a) => (
+                        <EmployeeAppointmentCard
+                          key={a.id}
+                          appointment={a}
+                          onStatusChange={handleStatusChange}
+                          updating={updating === a.id}
+                          past
+                        />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  onClick={() => setShowPast(false)}
+                >
+                  Ocultar citas anteriores
+                </button>
+              </>
+            )}
           </div>
         )}
       </main>

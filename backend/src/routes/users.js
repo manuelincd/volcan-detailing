@@ -8,6 +8,7 @@ const { ROLES } = require('../config/constants');
 
 router.use(auth, allow(ROLES.ADMIN));
 router.get('/', ctrl.list);
+router.get('/employees', ctrl.listEmployees);
 router.post('/', validate(schema.createEmployee), ctrl.create);
 router.put('/:id', validate(schema.update), ctrl.update);
 router.delete('/:id', ctrl.remove);

@@ -17,8 +17,10 @@ const ALLOWED_TRANSITIONS = {
   },
   [ROLES.ADMIN]: {
     [APPOINTMENT_STATUS.PENDING]:     [APPOINTMENT_STATUS.CONFIRMED, APPOINTMENT_STATUS.IN_PROGRESS, APPOINTMENT_STATUS.CANCELLED],
-    [APPOINTMENT_STATUS.CONFIRMED]:   [APPOINTMENT_STATUS.IN_PROGRESS, APPOINTMENT_STATUS.CANCELLED],
-    [APPOINTMENT_STATUS.IN_PROGRESS]: [APPOINTMENT_STATUS.COMPLETED, APPOINTMENT_STATUS.CANCELLED],
+    [APPOINTMENT_STATUS.CONFIRMED]:   [APPOINTMENT_STATUS.PENDING, APPOINTMENT_STATUS.IN_PROGRESS, APPOINTMENT_STATUS.CANCELLED],
+    [APPOINTMENT_STATUS.IN_PROGRESS]: [APPOINTMENT_STATUS.PENDING, APPOINTMENT_STATUS.CONFIRMED, APPOINTMENT_STATUS.COMPLETED, APPOINTMENT_STATUS.CANCELLED],
+    [APPOINTMENT_STATUS.COMPLETED]:   [APPOINTMENT_STATUS.PENDING, APPOINTMENT_STATUS.CONFIRMED, APPOINTMENT_STATUS.IN_PROGRESS, APPOINTMENT_STATUS.CANCELLED],
+    [APPOINTMENT_STATUS.CANCELLED]:   [APPOINTMENT_STATUS.PENDING, APPOINTMENT_STATUS.CONFIRMED, APPOINTMENT_STATUS.IN_PROGRESS],
   },
 };
 
@@ -176,6 +178,29 @@ exports.update = async (req, res, next) => {
       include: INCLUDE,
     });
     log.appointmentStatusChange(id, appointment.status, newStatus, sub, role);
+    ok(res, updated);
+  } catch (err) { next(err); }
+};
+
+exports.assign = async (req, res, next) => {
+  try {
+    const id = parseId(req.params.id);
+    if (!id) return fail(res, 'Invalid id', 'INVALID_ID', 400);
+
+    const { employeeId } = req.body;
+
+    const employee = await prisma.user.findUnique({ where: { id: employeeId } });
+    if (!employee || employee.role !== ROLES.EMPLOYEE || !employee.isActive)
+      return fail(res, 'Employee not found', 'EMPLOYEE_NOT_FOUND', 404);
+
+    const appointment = await prisma.appointment.findUnique({ where: { id } });
+    if (!appointment) return fail(res, 'Appointment not found', 'NOT_FOUND', 404);
+
+    const updated = await prisma.appointment.update({
+      where: { id },
+      data:  { employeeId },
+      include: INCLUDE,
+    });
     ok(res, updated);
   } catch (err) { next(err); }
 };

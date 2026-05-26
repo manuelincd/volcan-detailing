@@ -49,7 +49,7 @@ export default function AuditLogTab() {
     <div>
       <div className="tab-header">
         <h2 className="section-heading">Registro de actividad</h2>
-        <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>
+        <button className="btn btn-sm btn-reactivate" onClick={load} disabled={loading}>
           {loading ? 'Actualizando…' : 'Actualizar'}
         </button>
       </div>

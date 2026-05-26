@@ -23,7 +23,11 @@ module.exports = {
 
   updateStatus: Joi.object({
     status: Joi.string()
-      .valid('confirmed', 'in_progress', 'completed', 'cancelled')
+      .valid('pending', 'confirmed', 'in_progress', 'completed', 'cancelled')
       .required(),
+  }),
+
+  assign: Joi.object({
+    employeeId: Joi.number().integer().positive().required(),
   }),
 };

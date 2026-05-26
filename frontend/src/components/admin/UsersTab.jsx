@@ -19,7 +19,8 @@ export default function UsersTab() {
   const [form,         setForm]         = useState(INITIAL_FORM);
   const [formError,    setFormError]    = useState('');
   const [submitting,   setSubmitting]   = useState(false);
-  const [deactivating, setDeactivating] = useState(null);
+  const [deactivating,  setDeactivating]  = useState(null);
+  const [reactivating,  setReactivating]  = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -60,6 +61,18 @@ export default function UsersTab() {
       setError(err.response?.data?.message ?? 'No se pudo desactivar el usuario.');
     } finally {
       setDeactivating(null);
+    }
+  };
+
+  const handleReactivate = async (user) => {
+    setReactivating(user.id);
+    try {
+      const res = await userService.update(accessToken, user.id, { name: user.name, isActive: true });
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? res.data.data : u)));
+    } catch (err) {
+      setError(err.response?.data?.message ?? 'No se pudo reactivar el usuario.');
+    } finally {
+      setReactivating(null);
     }
   };
 
@@ -170,7 +183,7 @@ export default function UsersTab() {
           </thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.id}>
+              <tr key={u.id} className={u.isActive ? '' : 'tr-inactive'}>
                 <td className="td-primary">{u.name}</td>
                 <td>{u.email}</td>
                 <td>{u.phone ?? '—'}</td>
@@ -186,18 +199,28 @@ export default function UsersTab() {
                 </td>
                 <td>
                   <div className="table-actions">
-                    {u.isActive && u.id !== self?.id ? (
-                      <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => handleDeactivate(u.id)}
-                        disabled={deactivating === u.id}
-                      >
-                        {deactivating === u.id
-                          ? <><span className="spinner" /> Desactivando…</>
-                          : 'Desactivar'}
-                      </button>
+                    {u.isActive ? (
+                      u.id !== self?.id && (
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleDeactivate(u.id)}
+                          disabled={deactivating === u.id}
+                        >
+                          {deactivating === u.id
+                            ? <><span className="spinner" /> Desactivando…</>
+                            : 'Desactivar'}
+                        </button>
+                      )
                     ) : (
-                      <span className="text-muted">—</span>
+                      <button
+                        className="btn btn-sm btn-reactivate"
+                        onClick={() => handleReactivate(u)}
+                        disabled={reactivating === u.id}
+                      >
+                        {reactivating === u.id
+                          ? <><span className="spinner" /> Reactivando…</>
+                          : 'Reactivar'}
+                      </button>
                     )}
                   </div>
                 </td>

@@ -24,6 +24,17 @@ exports.list = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+exports.listEmployees = async (req, res, next) => {
+  try {
+    const employees = await prisma.user.findMany({
+      where:   { role: ROLES.EMPLOYEE, isActive: true },
+      select:  { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    ok(res, employees);
+  } catch (err) { next(err); }
+};
+
 exports.create = async (req, res, next) => {
   try {
     // Whitelist: only these four fields are written; role is hardcoded to employee

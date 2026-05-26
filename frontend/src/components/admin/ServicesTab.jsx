@@ -196,7 +196,7 @@ export default function ServicesTab() {
               }}>
                 Precios por tipo de vehículo (MXN)
               </legend>
-              <div className="form-2col" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+              <div className="form-3col">
                 <div className="form-group">
                   <label htmlFor="svc-price-sedan">Sedán / Hatchback</label>
                   <input

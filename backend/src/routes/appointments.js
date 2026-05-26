@@ -10,6 +10,7 @@ router.use(auth);
 router.get('/', ctrl.list);
 router.post('/', allow(ROLES.CLIENT), validate(schema.create), ctrl.create);
 router.get('/:id', ctrl.get);
+router.patch('/:id/assign', allow(ROLES.ADMIN), validate(schema.assign), ctrl.assign);
 router.patch('/:id', validate(schema.updateStatus), ctrl.update);
 router.delete('/:id', allow(ROLES.ADMIN), ctrl.remove);
 

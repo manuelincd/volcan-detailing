@@ -7,5 +7,6 @@ export const appointmentService = {
   create: (token, data) => api.post('/appointments', data, { headers: headers(token) }),
   get: (token, id) => api.get(`/appointments/${id}`, { headers: headers(token) }),
   update: (token, id, data) => api.patch(`/appointments/${id}`, data, { headers: headers(token) }),
+  assign: (token, id, employeeId) => api.patch(`/appointments/${id}/assign`, { employeeId }, { headers: headers(token) }),
   remove: (token, id) => api.delete(`/appointments/${id}`, { headers: headers(token) }),
 };
